@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+:root {
+  --background: #EFEBE3; /* Cafe Paper Color */
+  --foreground: #1A1A1A; /* Cafe Ink Color */
+}
+
+@layer base {
+  body {
+    @apply bg-[#EFEBE3] text-stone-900 antialiased;
+  }
+}
+
+@layer components {
+  /* Enforce dark text on inputs explicitly */
+  .input-field {
+    @apply w-full bg-white text-stone-900 border border-stone-200 p-4 rounded-2xl outline-none focus:ring-2 focus:ring-[#C6A87C] transition-all placeholder:text-stone-400;
+  }
+}
+
+/* Hide scrollbar */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
