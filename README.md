@@ -1,38 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# The House Cafe
 
-## Getting Started
+The House Cafe is a full-stack web application designed for a premium coffee shop, built using Next.js and Supabase. It provides a sleek, responsive customer interface for viewing the menu and a secure administrative dashboard for real-time menu management.
 
-First, run the development server:
+## 🚀 Key Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+* **Dual-Mode Menu**: Customers can switch between the "Permanent" menu and "Daily Specials" via a floating tab system.
+* **Visual Presentation**: A clean, paper-textured UI that displays menu items with images, descriptions, prices, and category groupings.
+* **Admin Dashboard**: A management portal to view all items, toggle their "Permanent" or "Daily" status, and delete entries.
+* **Item Management**:
+   * Add new items with title, price, and description.
+   * Upload item images directly to Supabase storage.
+   * Create and manage custom menu categories on the fly.
+* **Integrated Feedback**: Includes a direct link for customers to leave Google Reviews and find the cafe via a map embed.
+
+## 🛠️ Tech Stack
+
+* **Framework**: Next.js (App Router)
+* **Backend**: Supabase (Database, Auth, and Storage)
+* **Styling**: Tailwind CSS
+* **Icons**: Lucide React
+* **Language**: TypeScript
+
+## 📁 Project Structure
+```
+├── app/
+│   ├── admin/
+│   │   ├── add/page.tsx         # Add new menu item & categories
+│   │   ├── dashboard/page.tsx   # Item management dashboard
+│   │   └── page.tsx             # Admin entry point
+│   ├── layout.tsx               # Global styles & layout
+│   └── page.tsx                 # Customer-facing home page
+├── components/
+│   ├── DynamicMenu.tsx          # Menu state & tab switching logic
+│   ├── Header.tsx               # Navigation & brand identity
+│   ├── MenuList.tsx             # The visual "Paper Card" menu display
+│   └── StatusModal.tsx          # Reusable success/error/confirm dialogs
+├── lib/
+│   └── supabase.ts              # Supabase client initialization
+└── public/                      # Static assets and icons
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## ⚙️ Setup & Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Clone the Repository and install dependencies**:
+```bash
+npm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. **Environment Configuration**: Create a `.env.local` file and add your Supabase credentials:
+```
+NEXT_PUBLIC_SUPABASE_URL=your_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+```
 
-## Learn More
+3. **Run Development Server**:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open http://localhost:3000 to view the result.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📝 Admin Access
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# The-House
-# The-House
+The administrative features are protected by a session check. The dashboard requires a `house_admin_session` to be present in the browser's session storage to view or edit menu items. Menu images are stored in a Supabase bucket titled `menu-images`.
