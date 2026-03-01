@@ -12,6 +12,9 @@ export default function SettingsPage() {
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [pwaFile, setPwaFile] = useState<File | null>(null);
     const [pdfFile, setPdfFile] = useState<File | null>(null);
+    const [videos, setVideos] = useState<{ id?: string; video_url: string; title: string }[]>([]);
+    const [newVideoUrl, setNewVideoUrl] = useState('');
+    const [newVideoTitle, setNewVideoTitle] = useState('');
     const [settings, setSettings] = useState({
         // Brand & Theme
         primary_hex: '#C6A87C',
@@ -38,7 +41,8 @@ export default function SettingsPage() {
         facebook_url: '',
         review_url: '',
         // Marketing
-        promo_banner_text: ''
+        promo_banner_text: '',
+        tagline: 'Premium Coffee & Cozy Vibes'
     });
 
     useEffect(() => {
@@ -54,6 +58,9 @@ export default function SettingsPage() {
         if (data && !error) {
             setSettings(data);
         }
+        // Fetch videos
+        const { data: vids } = await supabase.from('promo_videos').select('*').order('display_order');
+        setVideos(vids || []);
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -158,11 +165,12 @@ export default function SettingsPage() {
                             <select name="menu_mode" value={settings.menu_mode || 'list'} onChange={handleChange} className="input-field w-full bg-white font-bold border-stone-800 text-stone-800">
                                 <option value="list">Standard Native UI</option>
                                 <option value="flipbook">Legacy PDF Flipbook</option>
+                                <option value="both">Both (PDF + Live Menu)</option>
                             </select>
-                            <p className="text-[10px] text-stone-400 mt-2">If Flipbook is selected, the database menu items are bypassed and the PDF below is rendered.</p>
+                            <p className="text-[10px] text-stone-400 mt-2">"Both" displays a tab switcher so customers can choose between the PDF flipbook and the live database menu.</p>
                         </div>
 
-                        {settings.menu_mode === 'flipbook' && (
+                        {(settings.menu_mode === 'flipbook' || settings.menu_mode === 'both') && (
                             <div className="p-4 bg-stone-50 rounded-2xl border border-stone-200">
                                 <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Menu PDF File</label>
                                 <div className="w-full relative">
@@ -229,15 +237,76 @@ export default function SettingsPage() {
                             <input type="text" name="address" value={settings.address || ''} onChange={handleChange} className="input-field" placeholder="123 Main St..." />
                         </div>
                         <div>
+                            <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Tagline</label>
+                            <input type="text" name="tagline" value={settings.tagline || ''} onChange={handleChange} className="input-field" placeholder="Premium Coffee & Cozy Vibes" />
+                            <p className="text-[10px] text-stone-400 mt-1">Displayed below the logo/name in the header.</p>
+                        </div>
+                        <div>
                             <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Google Maps Embed URL</label>
                             <textarea name="map_embed_url" value={settings.map_embed_url || ''} onChange={handleChange} className="input-field text-xs h-20" placeholder="<iframe src='...' ></iframe>" />
                             <p className="text-[10px] text-stone-400 mt-1">Paste the full iframe HTML from Google Maps.</p>
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Promo Video URL (YouTube/Vimeo)</label>
-                            <input type="text" name="promo_video_url" value={settings.promo_video_url || ''} onChange={handleChange} className="input-field" placeholder="https://youtube.com/watch?v=..." />
-                            <p className="text-[10px] text-stone-400 mt-1">Leave blank to hide the 'Watch Us in Action' section on your page.</p>
+                            <label className="block text-xs font-bold text-stone-500 mb-2 uppercase tracking-wide">Promo Videos (YouTube/Vimeo)</label>
+
+                            {/* Existing videos */}
+                            {videos.length > 0 && (
+                                <div className="space-y-2 mb-4">
+                                    {videos.map((v, i) => (
+                                        <div key={v.id || i} className="flex items-center gap-2 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-bold truncate">{v.title || 'Untitled'}</p>
+                                                <p className="text-[10px] text-stone-400 truncate">{v.video_url}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={async () => {
+                                                    if (v.id) await supabase.from('promo_videos').delete().eq('id', v.id);
+                                                    setVideos(videos.filter((_, idx) => idx !== i));
+                                                }}
+                                                className="text-red-400 hover:text-red-600 text-xs font-bold uppercase px-2"
+                                            >✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Add new video */}
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    className="input-field flex-1 text-sm"
+                                    placeholder="Video URL"
+                                    value={newVideoUrl}
+                                    onChange={e => setNewVideoUrl(e.target.value)}
+                                />
+                                <input
+                                    type="text"
+                                    className="input-field w-32 text-sm"
+                                    placeholder="Title"
+                                    value={newVideoTitle}
+                                    onChange={e => setNewVideoTitle(e.target.value)}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        if (!newVideoUrl) return;
+                                        const { data, error } = await supabase.from('promo_videos').insert({
+                                            video_url: newVideoUrl,
+                                            title: newVideoTitle,
+                                            display_order: videos.length
+                                        }).select().single();
+                                        if (!error && data) {
+                                            setVideos([...videos, data]);
+                                            setNewVideoUrl('');
+                                            setNewVideoTitle('');
+                                        }
+                                    }}
+                                    className="bg-stone-900 text-white px-4 rounded-xl text-xs font-bold uppercase hover:bg-stone-800 transition-colors"
+                                >Add</button>
+                            </div>
+                            <p className="text-[10px] text-stone-400 mt-2">Add multiple videos — they'll appear as a carousel. Leave empty to hide the section.</p>
                         </div>
 
                         <div>

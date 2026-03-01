@@ -1,6 +1,7 @@
 import Header from '@/components/Header';
 import DynamicMenu from '@/components/DynamicMenu';
 import FlipbookMenuWrapper from '@/components/FlipbookMenuWrapper';
+import DualMenuToggle from '@/components/DualMenuToggle';
 import AtmosphereGallery from '@/components/AtmosphereGallery';
 import PromoVideo from '@/components/PromoVideo';
 import BusinessDetails from '@/components/BusinessDetails';
@@ -35,10 +36,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function Home() {
   const [
     { data: settings },
-    { data: images }
+    { data: images },
+    { data: promoVideos }
   ] = await Promise.all([
     supabase.from('settings').select('*').single(),
-    supabase.from('gallery_images').select('*').order('display_order', { ascending: true })
+    supabase.from('gallery_images').select('*').order('display_order', { ascending: true }),
+    supabase.from('promo_videos').select('*').order('display_order', { ascending: true })
   ]);
 
   // Compute theme variables
@@ -69,7 +72,10 @@ export default async function Home() {
 
       <Header settings={settings} />
 
-      {settings?.menu_mode === 'flipbook' && settings?.pdf_url ? (
+      {/* Menu Section — supports 3 modes */}
+      {settings?.menu_mode === 'both' && settings?.pdf_url ? (
+        <DualMenuToggle pdfUrl={settings.pdf_url} settings={settings} />
+      ) : settings?.menu_mode === 'flipbook' && settings?.pdf_url ? (
         <FlipbookMenuWrapper pdfUrl={settings.pdf_url} />
       ) : (
         <DynamicMenu settings={settings} />
@@ -80,9 +86,12 @@ export default async function Home() {
         <AtmosphereGallery images={images} />
       )}
 
-      {/* Promo Video */}
-      {settings?.promo_video_url && (
-        <PromoVideo videoUrl={settings.promo_video_url} />
+      {/* Promo Videos */}
+      {((promoVideos && promoVideos.length > 0) || settings?.promo_video_url) && (
+        <PromoVideo
+          videos={promoVideos || []}
+          legacyUrl={settings?.promo_video_url}
+        />
       )}
 
       {/* Business Details (About, Amenities, Hours) */}

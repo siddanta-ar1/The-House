@@ -10,9 +10,6 @@ interface Props {
 }
 
 export default function MenuList({ categories, items, isDaily, settings, onCategoryClick }: Props) {
-  // Dynamic Map URL
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const mapUrl = settings?.map_embed_url || "https://www.google.com/maps/embed?pb=!1m18!...";
   const reviewLink = settings?.review_url || "#";
 
   return (

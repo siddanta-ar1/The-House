@@ -33,7 +33,7 @@ export default function Header({ settings }: { settings?: any }) {
 
         {/* Subtitle */}
         <p className="text-[9px] text-primary tracking-[0.4em] uppercase font-bold">
-          Premium Coffee & Cozy Vibes
+          {settings?.tagline || 'Premium Coffee & Cozy Vibes'}
         </p>
       </div>
     </header>
