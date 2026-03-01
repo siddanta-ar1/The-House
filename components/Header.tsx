@@ -13,15 +13,23 @@ export default function Header({ settings }: { settings?: any }) {
       </div>
 
       <div className="flex flex-col items-center">
-        {/* Brand Icon */}
-        <div className="mb-4">
-          <Coffee size={28} className="text-[#F4F1EA]" />
-        </div>
+        {settings?.logo_url ? (
+          <div className="mb-2 h-20 w-auto">
+            <img src={settings.logo_url} alt={settings?.cafe_name || "Logo"} className="h-full w-auto object-contain" />
+          </div>
+        ) : (
+          <>
+            {/* Brand Icon */}
+            <div className="mb-4">
+              <Coffee size={28} className="text-[#F4F1EA]" />
+            </div>
 
-        {/* Title */}
-        <h1 className="text-3xl font-bold tracking-[0.1em] uppercase text-white mb-2">
-          {settings?.cafe_name || "The House"}
-        </h1>
+            {/* Title */}
+            <h1 className="text-3xl font-bold tracking-[0.1em] uppercase text-white mb-2">
+              {settings?.cafe_name || "The House"}
+            </h1>
+          </>
+        )}
 
         {/* Subtitle */}
         <p className="text-[9px] text-primary tracking-[0.4em] uppercase font-bold">

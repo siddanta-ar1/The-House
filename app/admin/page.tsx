@@ -7,7 +7,7 @@ import StatusModal from '@/components/StatusModal';
 export default function AdminLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [modal, setModal] = useState({ open: false, msg: '', type: 'error' as any });
+  const [modal, setModal] = useState({ open: false, msg: '', type: 'error' as 'success' | 'error' | 'confirm' });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 

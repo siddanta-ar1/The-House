@@ -6,10 +6,12 @@ interface Props {
   isDaily: boolean;
   image?: string | null;
   settings?: any;
+  onCategoryClick?: (categoryId: string) => void;
 }
 
-export default function MenuList({ categories, items, isDaily, settings }: Props) {
+export default function MenuList({ categories, items, isDaily, settings, onCategoryClick }: Props) {
   // Dynamic Map URL
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const mapUrl = settings?.map_embed_url || "https://www.google.com/maps/embed?pb=!1m18!...";
   const reviewLink = settings?.review_url || "#";
 
@@ -91,12 +93,15 @@ export default function MenuList({ categories, items, isDaily, settings }: Props
             <div key={cat.id} className="mb-14 last:mb-0">
 
               {/* Borcelle Header: Icon + Name + Lines */}
-              <div className="flex items-center gap-4 mb-8">
-                <div className="h-[1px] flex-1 bg-[#3D2B1F]/30" />
-                <h3 className="text-xl font-serif font-bold uppercase tracking-[0.2em] text-[#3D2B1F] px-2">
+              <div
+                className="flex items-center gap-4 mb-8 cursor-pointer group"
+                onClick={() => onCategoryClick && onCategoryClick(cat.id)}
+              >
+                <div className="h-[1px] flex-1 bg-[#3D2B1F]/30 group-hover:bg-primary transition-colors" />
+                <h3 className="text-xl font-serif font-bold uppercase tracking-[0.2em] text-[#3D2B1F] px-2 group-hover:text-primary transition-colors">
                   {cat.name}
                 </h3>
-                <div className="h-[1px] flex-1 bg-[#3D2B1F]/30" />
+                <div className="h-[1px] flex-1 bg-[#3D2B1F]/30 group-hover:bg-primary transition-colors" />
               </div>
 
               {/* Items List/Grid */}

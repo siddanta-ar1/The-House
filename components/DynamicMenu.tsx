@@ -40,6 +40,10 @@ export default function DynamicMenu({ settings }: { settings?: any }) {
     }
   }, []);
 
+  const handleCategoryClick = (categoryId: string) => {
+    supabase.from('category_clicks').insert({ category_id: categoryId }).then();
+  };
+
   if (loading) return (
     <div className="min-h-[50vh] flex items-center justify-center">
       <div className="text-primary uppercase tracking-[0.3em] text-xs font-bold animate-pulse">Loading Menu...</div>
@@ -90,7 +94,13 @@ export default function DynamicMenu({ settings }: { settings?: any }) {
       </div>
 
       {/* --- The Visual Menu Component --- */}
-      <MenuList categories={data.categories} items={filteredItems} isDaily={activeTab === 'daily'} settings={settings} />
+      <MenuList
+        categories={data.categories}
+        items={filteredItems}
+        isDaily={activeTab === 'daily'}
+        settings={settings}
+        onCategoryClick={handleCategoryClick}
+      />
 
     </div>
   );

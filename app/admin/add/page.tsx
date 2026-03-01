@@ -40,7 +40,7 @@ export default function AddItemPage() {
   // ... keep addCategory and handleSubmit functions exactly as before ...
   async function addCategory() {
     if (!newCatName) return;
-    const catData: any = { name: newCatName };
+    const catData: Record<string, unknown> = { name: newCatName };
     if (newCatStart) catData.start_time = newCatStart;
     if (newCatEnd) catData.end_time = newCatEnd;
 
@@ -109,7 +109,7 @@ export default function AddItemPage() {
             <label className="flex flex-col items-center cursor-pointer p-10 w-full h-full justify-center">
               <Camera className="text-stone-300 mb-2 group-hover:text-[#C6A87C]" />
               <span className="text-[10px] uppercase font-bold text-stone-400 group-hover:text-[#C6A87C]">Tap to upload</span>
-              <input type="file" className="hidden" onChange={e => setImage(e.target.files?.[0] || null)} />
+              <input type="file" className="hidden" accept="image/jpeg,image/png,image/webp" onChange={e => setImage(e.target.files?.[0] || null)} />
             </label>
           )}
         </div>
