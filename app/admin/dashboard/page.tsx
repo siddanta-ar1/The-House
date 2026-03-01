@@ -2,29 +2,51 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, Eye, EyeOff, Star, LogOut, HomeIcon } from 'lucide-react';
+import { Plus, Trash2, Eye, EyeOff, Star, LogOut, HomeIcon, Award, Settings } from 'lucide-react';
 import StatusModal from '@/components/StatusModal';
 
 export default function AdminDashboard() {
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
-  
+  const [totalViews, setTotalViews] = useState(0);
+
   // Modal State now includes a callback function holder
-  const [modal, setModal] = useState({ 
-    open: false, 
-    msg: '', 
-    type: 'success' as any, 
-    onConfirm: undefined as undefined | (() => void) 
+  const [modal, setModal] = useState({
+    open: false,
+    msg: '',
+    type: 'success' as any,
+    onConfirm: undefined as undefined | (() => void)
   });
 
   useEffect(() => {
-    if (!sessionStorage.getItem('house_admin_session')) router.push('/admin');
-    else fetchItems();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        router.push('/admin');
+      } else {
+        fetchItems();
+        fetchAnalytics();
+      }
+    });
+
+    // Also listen for auth state changes (e.g., logout in another tab)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push('/admin');
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [router]);
 
   async function fetchItems() {
     const { data } = await supabase.from('menu_items').select('*').order('created_at', { ascending: false });
     setItems(data || []);
+  }
+
+  async function fetchAnalytics() {
+    // Get count of views
+    const { count } = await supabase.from('menu_views').select('*', { count: 'exact', head: true });
+    setTotalViews(count || 0);
   }
 
   const toggleStatus = async (id: string, field: string, currentVal: boolean) => {
@@ -47,12 +69,17 @@ export default function AdminDashboard() {
     else fetchItems();
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/admin');
+  };
+
   return (
     <div className="min-h-screen bg-[#F4F1EA] pb-24 text-[#3D2B1F]">
-      <StatusModal 
-        isOpen={modal.open} 
-        message={modal.msg} 
-        type={modal.type} 
+      <StatusModal
+        isOpen={modal.open}
+        message={modal.msg}
+        type={modal.type}
         onClose={() => setModal({ ...modal, open: false })}
         onConfirm={modal.onConfirm}
       />
@@ -62,11 +89,13 @@ export default function AdminDashboard() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="font-bold text-lg uppercase tracking-widest">Menu Manager</h1>
-            <p className="text-[10px] text-stone-400 uppercase tracking-widest">{items.length} Items</p>
+            <p className="text-[10px] text-stone-400 uppercase tracking-widest">{items.length} Items • {totalViews} Total Views</p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => router.push('/')} className="bg-stone-800 p-3 rounded-full hover:bg-stone-700"><HomeIcon size={18}/></button>
-            <button onClick={() => router.push('/admin/add')} className="bg-white text-black p-3 rounded-full hover:scale-105 transition-transform"><Plus size={18}/></button>
+            <button onClick={() => router.push('/')} className="bg-stone-800 p-3 rounded-full hover:bg-stone-700" title="View Site"><HomeIcon size={18} /></button>
+            <button onClick={() => router.push('/admin/add')} className="bg-white text-black p-3 rounded-full hover:scale-105 transition-transform" title="Add Menu Item"><Plus size={18} /></button>
+            <button onClick={() => router.push('/admin/settings')} className="bg-white text-black p-3 rounded-full hover:scale-105 transition-transform" title="Settings"><Settings size={18} /></button>
+            <button onClick={handleLogout} className="bg-red-500/20 text-red-500 hover:bg-red-500 hover:text-white p-3 rounded-full transition-colors ml-2" title="Logout"><LogOut size={18} /></button>
           </div>
         </div>
       </div>
@@ -80,23 +109,33 @@ export default function AdminDashboard() {
               <h3 className="font-bold text-sm truncate uppercase">{item.name}</h3>
               <p className="text-xs text-stone-500 font-bold">Rs.{item.price}</p>
             </div>
-            
+
             <div className="flex gap-1">
-               {/* Permanent Toggle */}
-               <button 
+              {/* Permanent Toggle */}
+              <button
                 onClick={() => toggleStatus(item.id, 'is_permanent', item.is_permanent)}
                 className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-[10px] transition-colors ${item.is_permanent ? 'bg-[#3D2B1F] text-white' : 'bg-stone-100 text-stone-300'}`}
               >P</button>
-              
+
               {/* Daily Toggle */}
-              <button 
+              <button
                 onClick={() => toggleStatus(item.id, 'is_daily', item.is_daily)}
                 className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${item.is_daily ? 'bg-[#C6A87C] text-white' : 'bg-stone-100 text-stone-300'}`}
+                title="Daily Special"
               >
                 <Star size={14} fill={item.is_daily ? "currentColor" : "none"} />
               </button>
 
-              <button 
+              {/* Featured Toggle */}
+              <button
+                onClick={() => toggleStatus(item.id, 'is_featured', item.is_featured)}
+                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${item.is_featured ? 'bg-rose-500 text-white' : 'bg-stone-100 text-stone-300'}`}
+                title="Featured (Most Popular)"
+              >
+                <Award size={14} fill={item.is_featured ? "currentColor" : "none"} />
+              </button>
+
+              <button
                 onClick={() => handleDeleteRequest(item.id)}
                 className="w-8 h-8 flex items-center justify-center rounded-lg bg-stone-100 text-stone-400 hover:bg-red-50 hover:text-red-500"
               >
