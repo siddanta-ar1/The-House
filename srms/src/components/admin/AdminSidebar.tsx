@@ -1,0 +1,125 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { LayoutDashboard, Users, UtensilsCrossed, Settings, LogOut, BarChart3, Palette, Grid3X3, Menu, X, TrendingUp, ShoppingBag } from 'lucide-react'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+
+export default function AdminSidebar() {
+    const pathname = usePathname()
+    const router = useRouter()
+    const supabase = createClient()
+    const [isOpen, setIsOpen] = useState(false)
+
+    // Auto-close drawer on route change
+    useEffect(() => {
+        setIsOpen(false)
+    }, [pathname])
+
+    const handleSignOut = async () => {
+        await supabase.auth.signOut()
+        router.push('/admin')
+        router.refresh()
+    }
+
+    const sidebarContent = (
+        <>
+            <div className="p-5 md:p-6 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="bg-[var(--color-primary)] p-2 rounded-lg text-white">
+                        <LayoutDashboard size={20} />
+                    </div>
+                    <h1 className="text-lg font-bold text-gray-900 leading-tight">Admin<br /><span className="text-[var(--color-secondary)] text-sm">Dashboard</span></h1>
+                </div>
+                {/* Close button — mobile only */}
+                <button
+                    onClick={() => setIsOpen(false)}
+                    className="md:hidden p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                >
+                    <X size={20} />
+                </button>
+            </div>
+
+            <nav className="flex-1 p-3 md:p-4 space-y-1 overflow-y-auto">
+                <NavLink href="/admin/dashboard" icon={BarChart3} label="Overview" currentPath={pathname} />
+                <NavLink href="/admin/menu" icon={UtensilsCrossed} label="Menu" currentPath={pathname} />
+                <NavLink href="/admin/orders" icon={ShoppingBag} label="Orders" currentPath={pathname} />
+                <NavLink href="/admin/staff" icon={Users} label="Staff" currentPath={pathname} />
+                <NavLink href="/admin/tables" icon={Grid3X3} label="Tables & QR" currentPath={pathname} />
+                <NavLink href="/admin/analytics" icon={TrendingUp} label="Analytics" currentPath={pathname} />
+                <div className="pt-3 mt-3 border-t border-gray-100">
+                    <h4 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Config</h4>
+                    <NavLink href="/admin/theme" icon={Palette} label="Brand & Theme" currentPath={pathname} />
+                    <NavLink href="/admin/settings" icon={Settings} label="Settings" currentPath={pathname} />
+                </div>
+            </nav>
+
+            <div className="p-3 md:p-4 border-t border-gray-200">
+                <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium text-gray-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition active:scale-95"
+                >
+                    <LogOut size={18} />
+                    Sign Out
+                </button>
+            </div>
+        </>
+    )
+
+    return (
+        <>
+            {/* Mobile hamburger trigger — rendered in the layout header */}
+            <button
+                onClick={() => setIsOpen(true)}
+                className="md:hidden fixed top-3 left-3 z-40 p-2.5 bg-white border border-gray-200 rounded-xl shadow-md text-gray-700 hover:bg-gray-50 active:scale-95 transition"
+                aria-label="Open menu"
+            >
+                <Menu size={22} />
+            </button>
+
+            {/* Mobile Backdrop */}
+            {isOpen && (
+                <div
+                    className="md:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+                    onClick={() => setIsOpen(false)}
+                />
+            )}
+
+            {/* Mobile Drawer */}
+            <aside
+                className={`
+                    md:hidden fixed top-0 left-0 bottom-0 w-72 bg-white z-50 flex flex-col shadow-2xl
+                    transition-transform duration-300 ease-out
+                    ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+                `}
+            >
+                {sidebarContent}
+            </aside>
+
+            {/* Desktop Sidebar — always visible on md+ */}
+            <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 shrink-0 flex-col z-20">
+                {sidebarContent}
+            </aside>
+        </>
+    )
+}
+
+function NavLink({ href, icon: Icon, label, currentPath }: { href: string, icon: React.ElementType, label: string, currentPath: string }) {
+    const isActive = currentPath === href || currentPath.startsWith(`${href}/`)
+
+    return (
+        <Link
+            href={href}
+            className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-[0.98]
+                ${isActive
+                    ? 'bg-[var(--color-primary)]/10 text-[var(--color-primary)]'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}
+            `}
+        >
+            <Icon size={18} className={isActive ? 'text-[var(--color-primary)]' : 'text-gray-400'} />
+            {label}
+        </Link>
+    )
+}

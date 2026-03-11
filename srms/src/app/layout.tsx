@@ -1,0 +1,117 @@
+import { Inter, Playfair_Display, Roboto, Lato } from 'next/font/google'
+import { Toaster } from 'react-hot-toast'
+import { ConfirmModal } from '@/components/shared/ConfirmModal'
+import type { Viewport } from 'next'
+import { createServerClient } from '@/lib/supabase/server'
+import PwaInstallPrompt from '@/components/shared/PwaInstallPrompt'
+import './globals.css'
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' })
+const playfair = Playfair_Display({ subsets: ['latin'], variable: '--font-playfair', display: 'swap' })
+const roboto = Roboto({ weight: ['400', '500', '700'], subsets: ['latin'], variable: '--font-roboto', display: 'swap' })
+const lato = Lato({ weight: ['400', '700'], subsets: ['latin'], variable: '--font-lato', display: 'swap' })
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: '#1B263B',
+}
+
+export const metadata = {
+  title: 'Smart Restaurant',
+  description: 'Mobile-first restaurant ordering system',
+  manifest: '/manifest.json',
+}
+
+// Fetch theme from settings or use defaults
+async function getThemeConfig() {
+  try {
+    const supabase = await createServerClient()
+    const { data } = await supabase
+      .from('settings')
+      .select('theme')
+      .limit(1)
+      .maybeSingle()
+
+    return data?.theme || {}
+  } catch {
+    return {}
+  }
+}
+
+function themeToCSS(theme: Record<string, string>): string {
+  const fontMap: Record<string, string> = {
+    Inter: 'var(--font-inter), sans-serif',
+    Playfair: 'var(--font-playfair), serif',
+    Roboto: 'var(--font-roboto), sans-serif',
+    Lato: 'var(--font-lato), sans-serif',
+  }
+
+  const radiusMap: Record<string, string> = {
+    none: '0px',
+    sm: '4px',
+    md: '8px',
+    lg: '12px',
+    xl: '20px',
+    full: '9999px',
+  }
+
+  return `
+    :root {
+      --color-primary: ${theme.primaryColor || '#E85D04'};
+      --color-secondary: ${theme.secondaryColor || '#1B263B'};
+      --font-family: ${fontMap[theme.fontFamily] || fontMap.Inter};
+      --border-radius: ${radiusMap[theme.borderRadius] || radiusMap.lg};
+    }
+  `
+}
+
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const theme = await getThemeConfig()
+
+  return (
+    <html lang="en">
+      <head>
+        <style dangerouslySetInnerHTML={{ __html: themeToCSS(theme) }} />
+      </head>
+      <body className={`
+        ${inter.variable} ${playfair.variable} ${roboto.variable} ${lato.variable} 
+        font-[family-name:var(--font-family)] 
+        bg-white text-[var(--color-secondary)] 
+        antialiased min-h-screen flex flex-col
+      `}>
+        {children}
+        <PwaInstallPrompt />
+        {/* Global Overlays */}
+        <Toaster
+          position="top-center"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#333',
+              color: '#fff',
+              borderRadius: '12px',
+              padding: '12px 20px',
+              fontWeight: 500,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            },
+            success: {
+              iconTheme: { primary: '#4ade80', secondary: '#fff' },
+              style: { background: 'white', color: '#1f2937', border: '1px solid #e5e7eb' },
+            },
+            error: {
+              iconTheme: { primary: '#ef4444', secondary: '#fff' },
+              style: { background: 'white', color: '#1f2937', border: '1px solid #e5e7eb' },
+            },
+          }}
+        />
+        <ConfirmModal />
+      </body>
+    </html>
+  )
+}

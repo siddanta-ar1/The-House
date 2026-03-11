@@ -1,0 +1,50 @@
+'use client'
+
+import { useConfirmStore } from '@/lib/stores/confirm'
+import { AlertCircle, CheckCircle2 } from 'lucide-react'
+
+export function ConfirmModal() {
+    const { isOpen, title, message, confirmText, cancelText, isDestructive, handleConfirm, handleCancel } = useConfirmStore()
+
+    if (!isOpen) return null
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-100">
+                <div className="p-6">
+                    <div className="flex items-start gap-4">
+                        <div className={`shrink-0 flex items-center justify-center w-10 h-10 rounded-full ${isDestructive ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
+                            {isDestructive ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+                        </div>
+                        <div className="flex-1 mt-0.5">
+                            <h3 className="text-lg font-semibold text-gray-900 leading-tight">
+                                {title}
+                            </h3>
+                            <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+                                {message}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3 rounded-b-2xl">
+                    <button
+                        onClick={handleCancel}
+                        className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[var(--color-primary)]/50"
+                    >
+                        {cancelText}
+                    </button>
+                    <button
+                        onClick={handleConfirm}
+                        className={`px-4 py-2 text-sm font-medium text-white rounded-lg shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${isDestructive
+                                ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500/50'
+                                : 'bg-[var(--color-primary)] hover:opacity-90 focus:ring-[var(--color-primary)]/50'
+                            }`}
+                    >
+                        {confirmText}
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
+}

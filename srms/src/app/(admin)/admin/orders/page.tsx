@@ -1,0 +1,143 @@
+import { createServerClient, createAdminClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+import { formatCurrency } from '@/lib/utils'
+import { ShoppingBag, Filter } from 'lucide-react'
+
+export const dynamic = 'force-dynamic'
+
+export default async function AdminOrdersPage() {
+    const supabase = await createServerClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) redirect('/admin')
+
+    const adminSupabase = await createAdminClient()
+    const { data: userData } = await adminSupabase
+        .from('users')
+        .select('restaurant_id')
+        .eq('id', user.id)
+        .single()
+
+    if (!userData?.restaurant_id) redirect('/unauthorized')
+
+    const restaurantId = userData.restaurant_id
+
+    // Fetch last 100 orders
+    const { data: orders } = await adminSupabase
+        .from('orders')
+        .select(`
+            id, status, total_amount, placed_at, customer_note,
+            sessions ( tables ( label ) ),
+            order_items ( id, quantity, menu_items ( name ) )
+        `)
+        .eq('restaurant_id', restaurantId)
+        .order('placed_at', { ascending: false })
+        .limit(100)
+
+    const statusColors: Record<string, string> = {
+        pending: 'bg-amber-100 text-amber-700 border-amber-200',
+        confirmed: 'bg-blue-100 text-blue-700 border-blue-200',
+        preparing: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+        ready: 'bg-green-100 text-green-700 border-green-200',
+        delivered: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        cancelled: 'bg-red-100 text-red-700 border-red-200',
+    }
+
+    return (
+        <div className="space-y-4 md:space-y-6">
+            <header>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900">Order History</h1>
+                <p className="text-gray-500 mt-1 text-sm md:text-base">View and track all orders placed through the system.</p>
+            </header>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-4 md:p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
+                    <h3 className="text-base md:text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <ShoppingBag size={18} /> All Orders ({orders?.length || 0})
+                    </h3>
+                </div>
+
+                {/* Desktop Table */}
+                <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-gray-600 uppercase bg-gray-50 border-b border-gray-100 font-semibold">
+                            <tr>
+                                <th className="px-6 py-3">Order</th>
+                                <th className="px-6 py-3">Table</th>
+                                <th className="px-6 py-3">Items</th>
+                                <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3">Time</th>
+                                <th className="px-6 py-3 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {orders?.map((order: any) => {
+                                const tableLabel = order.sessions?.tables?.label || '—'
+                                const itemCount = order.order_items?.length || 0
+                                const itemNames = order.order_items?.map((i: any) => `${i.quantity}x ${i.menu_items?.name}`).join(', ') || '—'
+
+                                return (
+                                    <tr key={order.id} className="hover:bg-gray-50/50 transition">
+                                        <td className="px-6 py-4 font-mono font-bold text-gray-900 text-xs">
+                                            #{order.id.substring(0, 8).toUpperCase()}
+                                        </td>
+                                        <td className="px-6 py-4 font-medium text-gray-700">{tableLabel}</td>
+                                        <td className="px-6 py-4 text-gray-500 max-w-xs truncate" title={itemNames}>
+                                            {itemCount} item{itemCount !== 1 ? 's' : ''}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold uppercase border ${statusColors[order.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                                {order.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-gray-500 text-xs">
+                                            {new Date(order.placed_at).toLocaleDateString()} {new Date(order.placed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-bold text-gray-900">
+                                            {formatCurrency(order.total_amount)}
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                            {(!orders || orders.length === 0) && (
+                                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500">No orders found.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Mobile Card List */}
+                <div className="md:hidden divide-y divide-gray-100">
+                    {orders?.map((order: any) => {
+                        const tableLabel = order.sessions?.tables?.label || '—'
+                        const itemNames = order.order_items?.map((i: any) => `${i.quantity}x ${i.menu_items?.name}`).join(', ') || ''
+
+                        return (
+                            <div key={order.id} className="p-4 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <div className="font-mono text-xs font-bold text-gray-900">#{order.id.substring(0, 8).toUpperCase()}</div>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${statusColors[order.status] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                        {order.status}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-500">Table {tableLabel}</span>
+                                    <span className="font-bold text-gray-900">{formatCurrency(order.total_amount)}</span>
+                                </div>
+                                {itemNames && (
+                                    <p className="text-xs text-gray-400 truncate">{itemNames}</p>
+                                )}
+                                <div className="text-[10px] text-gray-400">
+                                    {new Date(order.placed_at).toLocaleDateString()} · {new Date(order.placed_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                            </div>
+                        )
+                    })}
+                    {(!orders || orders.length === 0) && (
+                        <div className="p-8 text-center text-gray-500">No orders found.</div>
+                    )}
+                </div>
+            </div>
+        </div>
+    )
+}

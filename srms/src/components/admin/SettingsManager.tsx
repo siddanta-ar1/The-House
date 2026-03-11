@@ -1,0 +1,233 @@
+'use client'
+
+import { useState } from 'react'
+import { Save, Store, Mail, Phone, MapPin, Building, Percent, Check, Loader2 } from 'lucide-react'
+import { updateRestaurantSettingsAction } from '@/app/(admin)/admin/settings/actions'
+import { toast } from 'react-hot-toast'
+
+type RestaurantSettings = {
+    id: string
+    name: string
+    logo_url: string | null
+    contact_email: string | null
+    contact_phone: string | null
+    address: string | null
+    tax_rate: number
+    currency: string
+}
+
+export default function SettingsManager({
+    initialRestaurant,
+    canEdit
+}: {
+    initialRestaurant: RestaurantSettings
+    canEdit: boolean
+}) {
+    const [formData, setFormData] = useState<RestaurantSettings>(initialRestaurant)
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isSuccess, setIsSuccess] = useState(false)
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value, type } = e.target
+        // Handle number inputs specifically
+        const finalValue = type === 'number' ? parseFloat(value) : value
+        setFormData({ ...formData, [name]: finalValue })
+    }
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!canEdit) return
+
+        setIsSubmitting(true)
+        setIsSuccess(false)
+
+        const res = await updateRestaurantSettingsAction(formData.id, formData)
+
+        if (res.success) {
+            setIsSuccess(true)
+            toast.success('Settings saved successfully')
+            setTimeout(() => setIsSuccess(false), 3000)
+        } else {
+            toast.error(res.error || 'Failed to save settings')
+        }
+
+        setIsSubmitting(false)
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
+            {/* General Information */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                        <Building size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800">General Information</h3>
+                        <p className="text-sm text-gray-500">Your restaurant's brand and physical details</p>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                <Store size={14} className="text-gray-400" />
+                                Restaurant Name *
+                            </label>
+                            <input
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                <MapPin size={14} className="text-gray-400" />
+                                Physical Address
+                            </label>
+                            <input
+                                type="text"
+                                name="address"
+                                value={formData.address || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                <Phone size={14} className="text-gray-400" />
+                                Contact Phone
+                            </label>
+                            <input
+                                type="tel"
+                                name="contact_phone"
+                                value={formData.contact_phone || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                <Mail size={14} className="text-gray-400" />
+                                Contact Email
+                            </label>
+                            <input
+                                type="email"
+                                name="contact_email"
+                                value={formData.contact_email || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Logo URL (Optional)</label>
+                        <input
+                            type="url"
+                            name="logo_url"
+                            value={formData.logo_url || ''}
+                            onChange={handleChange}
+                            disabled={!canEdit || isSubmitting}
+                            className="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                            placeholder="https://example.com/logo.png"
+                        />
+                        {formData.logo_url && (
+                            <div className="mt-4 p-4 rounded-xl border border-gray-100 bg-gray-50/50 inline-block">
+                                <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wide">Logo Preview</p>
+                                <img src={formData.logo_url} alt="Logo Preview" className="h-12 object-contain bg-white rounded p-1 border border-gray-200" />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Financial Details */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+                    <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
+                        <Percent size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Financial Rules</h3>
+                        <p className="text-sm text-gray-500">Taxes, service charges, and currency settings</p>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Tax Rate (%) *</label>
+                            <div className="relative border-gray-300 focus-within:ring-1 focus-within:ring-[var(--color-primary)] focus-within:border-[var(--color-primary)] rounded-lg shadow-sm border bg-white overflow-hidden">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    name="tax_rate"
+                                    value={formData.tax_rate}
+                                    onChange={handleChange}
+                                    disabled={!canEdit || isSubmitting}
+                                    className="w-full py-2.5 pl-3 pr-10 border-0 focus:ring-0 sm:text-sm disabled:bg-gray-50 disabled:text-gray-500"
+                                    required
+                                />
+                                <div className="absolute inset-y-0 right-0 flex items-center pointer-events-none pr-3">
+                                    <span className="text-gray-500 sm:text-sm">%</span>
+                                </div>
+                            </div>
+                            <p className="mt-1.5 text-xs text-gray-500">Applied automatically to all menu item purchases.</p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Currency Code *</label>
+                            <input
+                                type="text"
+                                name="currency"
+                                value={formData.currency}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                maxLength={3}
+                                className="w-full border-gray-300 rounded-lg shadow-sm focus:border-[var(--color-primary)] focus:ring-[var(--color-primary)] sm:text-sm p-2.5 border uppercase disabled:bg-gray-50 disabled:text-gray-500"
+                                placeholder="USD"
+                                required
+                            />
+                            <p className="mt-1.5 text-xs text-gray-500">Standard 3-letter currency code (e.g., USD, EUR, GBP).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="flex items-center justify-end gap-4 bg-gray-50 rounded-2xl p-4 border border-gray-200">
+                {!canEdit && (
+                    <span className="text-sm text-amber-600 font-medium px-4 py-2 bg-amber-50 rounded-lg border border-amber-200 mr-auto flex-1 text-left">
+                        You do not have permission to modify system settings.
+                    </span>
+                )}
+
+                {isSuccess && (
+                    <span className="text-sm text-green-600 font-medium flex items-center gap-1.5 animate-in fade-in duration-300">
+                        <Check size={16} /> Saved successfully
+                    </span>
+                )}
+
+                <button
+                    type="submit"
+                    disabled={!canEdit || isSubmitting}
+                    className="flex items-center gap-2 bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-xl text-sm font-medium hover:opacity-90 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    Save Changes
+                </button>
+            </div>
+        </form>
+    )
+}

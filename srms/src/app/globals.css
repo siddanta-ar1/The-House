@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: var(--font-family);
+    --color-primary: var(--color-primary);
+    --color-secondary: var(--color-secondary);
+    --radius-custom: var(--border-radius);
+}
+
+/* Custom utility classes and layers can go here */
+@layer utilities {
+    .glass {
+        @apply bg-white/70 backdrop-blur-md border border-white/20;
+    }
+}
+
+body {
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
