@@ -2,6 +2,9 @@
 -- Fix: v_promo not assigned when no promo code is provided
 -- The UPDATE at the end references v_promo.id even when
 -- p_promo_code IS NULL, causing "record not assigned yet"
+--
+-- This migration is based on 002_place_order_rpc.sql with
+-- ONLY the v_promo_id fix applied (no schema drift).
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION place_order(
@@ -12,7 +15,7 @@ CREATE OR REPLACE FUNCTION place_order(
   p_promo_code TEXT DEFAULT NULL,
   p_loyalty_member_id UUID DEFAULT NULL
 )
-RETURNS JSONB
+RETURNS JSONB  -- returns { order_id, subtotal, discount, tax, total, points_earned }
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
@@ -29,7 +32,7 @@ DECLARE
   v_effective_price NUMERIC(10,2);
   -- Promo
   v_promo RECORD;
-  v_promo_id UUID := NULL;  -- Track promo ID separately to avoid accessing unassigned record
+  v_promo_id UUID := NULL;  -- ← FIX: track promo ID separately to avoid accessing unassigned record
   v_discount NUMERIC(10,2) := 0;
   -- Tax
   v_tax_rate NUMERIC(6,2) := 0;
@@ -38,134 +41,122 @@ DECLARE
   v_loyalty_config RECORD;
   v_points_earned INTEGER := 0;
   -- Ingredients
-  v_ingredient RECORD;
-  v_required_qty NUMERIC;
+  v_recipe RECORD;
 BEGIN
-  -- 1. Validate session & get restaurant_id
-  SELECT s.restaurant_id INTO v_restaurant_id
-  FROM sessions s
-  WHERE s.id = p_session_id AND s.status = 'active';
+  -- 1. Verify the session is active and belongs to a real table
+  SELECT restaurant_id INTO v_restaurant_id
+  FROM sessions
+  WHERE id = p_session_id
+    AND status = 'active'
+    AND expires_at > NOW()
+  FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'INVALID_SESSION: Session not found or inactive';
+    RAISE EXCEPTION 'INVALID_SESSION: Session % is not active or has expired', p_session_id;
   END IF;
 
-  -- Get tax rate from settings
-  SELECT COALESCE((s.tax_config->>'tax_rate')::NUMERIC, 0) INTO v_tax_rate
-  FROM settings s WHERE s.restaurant_id = v_restaurant_id;
+  -- 1b. Load restaurant tax rate from settings (features_v2 JSONB column)
+  SELECT COALESCE((features_v2->>'defaultTaxRate')::NUMERIC, 0) INTO v_tax_rate
+  FROM settings
+  WHERE restaurant_id = v_restaurant_id;
 
-  -- 2. Create the order
-  INSERT INTO orders (
-    session_id, restaurant_id, status, payment_status,
-    customer_note, placed_at
-  ) VALUES (
-    p_session_id, v_restaurant_id, 'pending', 'unpaid',
-    p_customer_note, NOW()
-  )
+  -- 2. Create the order record
+  INSERT INTO orders (session_id, restaurant_id, customer_note, seat_id, loyalty_member_id)
+  VALUES (p_session_id, v_restaurant_id, p_customer_note, p_seat_id, p_loyalty_member_id)
   RETURNING id INTO v_order_id;
 
-  -- 3. Process each item in the order
+  -- 3. Process each line item with stock check
   FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
   LOOP
-    -- Lock menu item row — prevents concurrent stock modifications
+    -- Lock the menu_item row to prevent concurrent depletion
     SELECT * INTO v_menu_item
     FROM menu_items
     WHERE id = (v_item->>'menu_item_id')::UUID
       AND restaurant_id = v_restaurant_id
+      AND is_available = TRUE
     FOR UPDATE;
 
     IF NOT FOUND THEN
-      RAISE EXCEPTION 'ITEM_UNAVAILABLE: Menu item % not found', v_item->>'menu_item_id';
+      RAISE EXCEPTION 'ITEM_UNAVAILABLE: Item % is unavailable',
+        v_item->>'menu_item_id';
     END IF;
 
-    IF NOT v_menu_item.is_available THEN
-      RAISE EXCEPTION 'OUT_OF_STOCK: % is currently unavailable', v_menu_item.name;
-    END IF;
+    -- 3a. Get effective price (applies happy hour / dynamic pricing rules)
+    v_effective_price := get_effective_price(v_menu_item.id);
 
-    -- 3a. Check inventory for each ingredient
-    FOR v_ingredient IN
-      SELECT mi.ingredient_id, mi.quantity_per_item, i.name, i.current_stock
-      FROM menu_item_ingredients mi
-      JOIN ingredients i ON i.id = mi.ingredient_id
-      WHERE mi.menu_item_id = v_menu_item.id
-    LOOP
-      v_required_qty := v_ingredient.quantity_per_item * (v_item->>'quantity')::SMALLINT;
-      IF v_ingredient.current_stock < v_required_qty THEN
-        RAISE EXCEPTION 'OUT_OF_STOCK: Not enough % in stock for %', v_ingredient.name, v_menu_item.name;
+    -- Stock depletion check
+    IF v_menu_item.stock_count IS NOT NULL THEN
+      IF v_menu_item.stock_count < (v_item->>'quantity')::SMALLINT THEN
+        RAISE EXCEPTION 'OUT_OF_STOCK: Insufficient stock for item %',
+          v_menu_item.name;
       END IF;
+      UPDATE menu_items
+      SET stock_count = stock_count - (v_item->>'quantity')::SMALLINT
+      WHERE id = v_menu_item.id;
+    END IF;
 
-      -- Deduct ingredient stock
+    -- 3b. Deduct ingredients (if recipe management is configured)
+    FOR v_recipe IN
+      SELECT r.ingredient_id, r.quantity_needed
+      FROM recipes r
+      WHERE r.menu_item_id = v_menu_item.id
+    LOOP
       UPDATE ingredients
-      SET current_stock = current_stock - v_required_qty,
+      SET stock_quantity = stock_quantity - (v_recipe.quantity_needed * (v_item->>'quantity')::SMALLINT),
           updated_at = NOW()
-      WHERE id = v_ingredient.ingredient_id;
+      WHERE id = v_recipe.ingredient_id;
 
-      -- Log the ingredient movement
-      INSERT INTO ingredient_movements (ingredient_id, movement_type, quantity, reference_id, notes)
-      VALUES (v_ingredient.ingredient_id, 'order_deduction', v_required_qty, v_order_id,
-              'Auto-deducted for order ' || v_order_id::TEXT);
+      -- Log the movement
+      INSERT INTO ingredient_movements (ingredient_id, movement_type, quantity, reference_id)
+      VALUES (
+        v_recipe.ingredient_id,
+        'usage',
+        -(v_recipe.quantity_needed * (v_item->>'quantity')::SMALLINT),
+        v_order_id
+      );
     END LOOP;
 
-    -- 3b. Calculate effective price (check pricing rules)
-    v_effective_price := v_menu_item.price;
-    
-    -- Check for active pricing rule (time-based, happy hour, etc.)
-    DECLARE
-      v_pricing_rule RECORD;
-    BEGIN
-      SELECT * INTO v_pricing_rule
-      FROM pricing_rules
-      WHERE menu_item_id = v_menu_item.id
-        AND is_active = TRUE
-        AND (start_time IS NULL OR start_time <= CURRENT_TIME)
-        AND (end_time IS NULL OR end_time >= CURRENT_TIME)
-        AND (valid_days IS NULL OR EXTRACT(DOW FROM CURRENT_DATE)::TEXT = ANY(
-          SELECT jsonb_array_elements_text(valid_days)
-        ))
-      ORDER BY created_at DESC
-      LIMIT 1;
-
-      IF FOUND THEN
-        IF v_pricing_rule.rule_type = 'discount_percentage' THEN
-          v_effective_price := ROUND(v_menu_item.price * (1 - v_pricing_rule.value / 100), 2);
-        ELSIF v_pricing_rule.rule_type = 'fixed_price' THEN
-          v_effective_price := v_pricing_rule.value;
-        ELSIF v_pricing_rule.rule_type = 'surcharge_percentage' THEN
-          v_effective_price := ROUND(v_menu_item.price * (1 + v_pricing_rule.value / 100), 2);
-        END IF;
-      END IF;
-    END;
-
-    -- 3c. Insert order item
+    -- Insert order item with effective (dynamic) price snapshot
     INSERT INTO order_items (
       order_id, menu_item_id, quantity, unit_price, special_request
     ) VALUES (
-      v_order_id, v_menu_item.id, (v_item->>'quantity')::SMALLINT,
-      v_effective_price, v_item->>'special_request'
+      v_order_id,
+      v_menu_item.id,
+      (v_item->>'quantity')::SMALLINT,
+      v_effective_price,
+      v_item->>'special_request'
     )
     RETURNING id INTO v_order_item_id;
 
+    -- Start with effective price × quantity
     v_item_total := v_effective_price * (v_item->>'quantity')::SMALLINT;
 
-    -- 3d. Process modifiers for this item
+    -- 4. Process modifiers for this item (if any)
     IF v_item ? 'modifiers' AND jsonb_array_length(v_item->'modifiers') > 0 THEN
       FOR v_modifier IN SELECT * FROM jsonb_array_elements(v_item->'modifiers')
       LOOP
         SELECT * INTO v_mod_record
         FROM menu_item_modifiers
         WHERE id = (v_modifier->>'modifier_id')::UUID
-          AND menu_item_id = v_menu_item.id;
+          AND is_available = TRUE;
 
-        IF FOUND THEN
-          INSERT INTO order_item_modifiers (
-            order_item_id, modifier_name, price_adjustment
-          ) VALUES (
-            v_order_item_id, v_mod_record.name, v_mod_record.price_adjustment
-          );
-
-          -- Add modifier price × item quantity
-          v_item_total := v_item_total + (v_mod_record.price_adjustment * (v_item->>'quantity')::SMALLINT);
+        IF NOT FOUND THEN
+          RAISE EXCEPTION 'MODIFIER_UNAVAILABLE: Modifier % is unavailable',
+            v_modifier->>'modifier_id';
         END IF;
+
+        -- Snapshot modifier into order_item_modifiers
+        INSERT INTO order_item_modifiers (
+          order_item_id, modifier_id, modifier_name, price_adjustment
+        ) VALUES (
+          v_order_item_id,
+          v_mod_record.id,
+          v_mod_record.name,
+          v_mod_record.price_adjustment
+        );
+
+        -- Add modifier price × item quantity
+        v_item_total := v_item_total + (v_mod_record.price_adjustment * (v_item->>'quantity')::SMALLINT);
       END LOOP;
     END IF;
 
@@ -185,9 +176,9 @@ BEGIN
     FOR UPDATE;
 
     IF FOUND THEN
-      -- Track the promo ID safely
+      -- ← FIX: capture promo ID into a safe variable
       v_promo_id := v_promo.id;
-      
+
       -- Calculate discount based on type
       CASE v_promo.promo_type
         WHEN 'percentage_off' THEN
@@ -216,12 +207,14 @@ BEGIN
       -- Increment usage counter
       UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = v_promo_id;
     END IF;
+    -- If promo not found or invalid, silently skip
   END IF;
 
   -- 6. Calculate tax on (subtotal - discount)
   v_tax := ROUND((v_subtotal - v_discount) * v_tax_rate / 100, 2);
 
-  -- 7. Update order financial totals (use v_promo_id instead of v_promo.id)
+  -- 7. Update order financial totals
+  --    ← FIX: use v_promo_id instead of v_promo.id (avoids "record not assigned" crash)
   UPDATE orders
   SET subtotal_amount = v_subtotal,
       discount_amount = v_discount,
@@ -239,22 +232,31 @@ BEGIN
     IF FOUND THEN
       v_points_earned := FLOOR((v_subtotal - v_discount) * v_loyalty_config.points_per_dollar);
 
+      -- Credit points
       UPDATE loyalty_members
-      SET total_points = total_points + v_points_earned,
-          available_points = available_points + v_points_earned,
+      SET points_balance = points_balance + v_points_earned,
+          lifetime_points = lifetime_points + v_points_earned,
+          lifetime_spend = lifetime_spend + (v_subtotal - v_discount + v_tax),
+          visit_count = visit_count + 1,
+          last_visit_at = NOW(),
+          -- Auto-upgrade tier
+          tier = CASE
+            WHEN lifetime_points + v_points_earned >= v_loyalty_config.platinum_threshold THEN 'platinum'
+            WHEN lifetime_points + v_points_earned >= v_loyalty_config.gold_threshold THEN 'gold'
+            WHEN lifetime_points + v_points_earned >= v_loyalty_config.silver_threshold THEN 'silver'
+            ELSE 'bronze'
+          END,
           updated_at = NOW()
       WHERE id = p_loyalty_member_id;
 
-      INSERT INTO loyalty_transactions (
-        member_id, type, points, reference_id, description
-      ) VALUES (
-        p_loyalty_member_id, 'earn', v_points_earned, v_order_id,
-        'Earned from order #' || SUBSTR(v_order_id::TEXT, 1, 8)
-      );
+      -- Log the transaction
+      INSERT INTO loyalty_transactions (member_id, order_id, type, points, description)
+      VALUES (p_loyalty_member_id, v_order_id, 'earn', v_points_earned,
+        'Earned ' || v_points_earned || ' points on order ' || v_order_id::TEXT);
     END IF;
   END IF;
 
-  -- 9. Return order details as JSONB
+  -- Return rich response
   RETURN jsonb_build_object(
     'order_id', v_order_id,
     'subtotal', v_subtotal,
