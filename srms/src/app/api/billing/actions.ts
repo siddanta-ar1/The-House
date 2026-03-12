@@ -16,11 +16,39 @@ export async function createBillSplit(
 ): Promise<SplitBillResult> {
     const supabase = await createAdminClient()
 
+    // Resolve session_token → session UUID (also accepts UUID directly)
+    let sessionUuid = sessionId
+
+    // Try resolving as session_token first
+    const { data: sessionData } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('session_token', sessionId)
+        .eq('status', 'active')
+        .single()
+
+    if (sessionData) {
+        sessionUuid = sessionData.id
+    } else {
+        // Maybe it's already a UUID — verify it exists
+        const { data: directSession } = await supabase
+            .from('sessions')
+            .select('id')
+            .eq('id', sessionId)
+            .eq('status', 'active')
+            .single()
+
+        if (!directSession) {
+            return { error: 'Session not found or expired.' }
+        }
+        sessionUuid = directSession.id
+    }
+
     // Get all orders for this session
     const { data: orders, error: ordersErr } = await supabase
         .from('orders')
         .select('id, total_amount, tax_amount, tip_amount, seat_id, subtotal_amount')
-        .eq('session_id', sessionId)
+        .eq('session_id', sessionUuid)
         .neq('status', 'cancelled')
 
     if (ordersErr || !orders?.length) {
@@ -35,7 +63,7 @@ export async function createBillSplit(
     const { data: billSplit, error: splitErr } = await supabase
         .from('bill_splits')
         .insert({
-            session_id: sessionId,
+            session_id: sessionUuid,
             split_type: splitType,
             total_amount: totalAmount,
             split_count: splitCount,
@@ -109,8 +137,7 @@ export async function createBillSplit(
 }
 
 export async function payBillSplitItem(
-    splitItemId: string,
-    paymentMethod: 'cash' | 'card'
+    splitItemId: string
 ): Promise<{ success: boolean; error?: string }> {
     const supabase = await createAdminClient()
 
@@ -118,7 +145,6 @@ export async function payBillSplitItem(
         .from('bill_split_items')
         .update({
             payment_status: 'paid',
-            payment_method: paymentMethod,
             paid_at: new Date().toISOString(),
         })
         .eq('id', splitItemId)

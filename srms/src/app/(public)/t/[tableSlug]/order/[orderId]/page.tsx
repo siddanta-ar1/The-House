@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import OrderTracker from '@/components/customer/OrderTracker'
 import InvoiceBanner from '@/components/customer/InvoiceBanner'
 import OrderPaymentSection from '@/components/customer/OrderPaymentSection'
+import OrderSplitBillSection from '@/components/customer/OrderSplitBillSection'
 import Link from 'next/link'
 import { getRestaurantFeatures } from '@/lib/features'
 
@@ -73,6 +74,14 @@ export default async function OrderPage(props: {
                         paymentStatus={order.payment_status}
                         paymentQrUrl={restaurantInfo?.payment_qr_url || null}
                         paymentQrLabel={restaurantInfo?.payment_qr_label || null}
+                    />
+                )}
+
+                {/* Split Bill Section — shown when split billing is enabled and order isn't paid yet */}
+                {order.session_id && features?.splitBillingEnabled && order.payment_status !== 'paid' && (
+                    <OrderSplitBillSection
+                        sessionId={order.session_id}
+                        totalAmount={order.total_amount}
                     />
                 )}
 

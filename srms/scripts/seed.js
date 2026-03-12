@@ -56,11 +56,11 @@ async function seed() {
         },
         features_v2: {
             takeoutEnabled: true,
-            loyaltyEnabled: false,
+            loyaltyEnabled: true,
             dynamicPricingEnabled: false,
             ingredientTrackingEnabled: false,
             staffShiftsEnabled: false,
-            splitBillingEnabled: false,
+            splitBillingEnabled: true,
             serviceRequestsEnabled: true,
             nepalPayEnabled: true,
             defaultTaxRate: 13
@@ -68,6 +68,22 @@ async function seed() {
     }, { onConflict: 'restaurant_id' });
     if (setError) console.error('Error seeding settings:', setError.message);
     else console.log('Settings seeded.');
+
+    // 3b. Loyalty Config
+    const { error: loyaltyError } = await supabase.from('loyalty_config').upsert({
+        restaurant_id: restaurantId,
+        points_per_dollar: 10,
+        redemption_threshold: 100,
+        redemption_value: 5.00,
+        silver_threshold: 500,
+        gold_threshold: 1500,
+        platinum_threshold: 5000,
+        birthday_bonus_points: 50,
+        signup_bonus_points: 25,
+        is_active: true
+    }, { onConflict: 'restaurant_id' });
+    if (loyaltyError) console.error('Error seeding loyalty_config:', loyaltyError.message);
+    else console.log('Loyalty config seeded.');
 
     // 4. Tables
     const tables = [

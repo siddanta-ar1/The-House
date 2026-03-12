@@ -16,14 +16,13 @@ export async function submitPaymentClaim(formData: FormData): Promise<{ error?: 
     }
 
     const supabase = await createAdminClient()
-    let screenshotUrl: string | null = null
 
-    // Upload screenshot if provided
+    // Upload screenshot if provided (store URL for manual reference, not in DB)
     if (screenshot && screenshot.size > 0) {
         const ext = screenshot.name.split('.').pop()
         const fileName = `payment-proofs/${restaurantId}/${Date.now()}.${ext}`
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
             .from('uploads')
             .upload(fileName, screenshot, {
                 contentType: screenshot.type,
@@ -33,23 +32,25 @@ export async function submitPaymentClaim(formData: FormData): Promise<{ error?: 
         if (uploadError) {
             console.error('Screenshot upload failed:', uploadError)
             // Continue without screenshot — it's optional
-        } else {
-            const { data: urlData } = supabase.storage.from('uploads').getPublicUrl(uploadData.path)
-            screenshotUrl = urlData.publicUrl
         }
     }
 
     // Insert payment verification record
+    // DB columns: amount, payment_method, reference_code (for phone/txn id)
+    // status is derived from staff_verified/staff_rejected booleans (defaults false)
+    // Map the provider label to a valid payment_method enum value
+    const VALID_METHODS = ['qr_scan', 'esewa', 'khalti', 'fonepay', 'cash', 'card', 'stripe'] as const
+    const normalised = (provider || '').toLowerCase().trim()
+    const paymentMethod = VALID_METHODS.find(m => normalised.includes(m)) || 'qr_scan'
+
     const { error } = await supabase
         .from('payment_verifications')
         .insert({
             restaurant_id: restaurantId,
             order_id: orderId || null,
-            claimed_amount: amount,
-            customer_phone: phone,
-            provider,
-            screenshot_url: screenshotUrl,
-            status: 'pending',
+            amount,
+            payment_method: paymentMethod,
+            reference_code: phone,
         })
 
     if (error) {

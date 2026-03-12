@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, XCircle, Clock, Smartphone, ImageIcon, Loader2, DoorClosed } from 'lucide-react'
+import { CheckCircle, XCircle, Clock, Smartphone, Loader2, DoorClosed } from 'lucide-react'
 import { verifyPayment, verifyPaymentAndCloseTable } from './payment-verification-actions'
 import { timeAgo } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
@@ -11,13 +11,22 @@ interface PaymentClaim {
     id: string
     order_id: string | null
     restaurant_id: string
-    claimed_amount: number
-    customer_phone: string
-    provider: string
-    screenshot_url: string | null
-    status: 'pending' | 'verified' | 'rejected'
-    verified_by: string | null
+    amount: number
+    payment_method: string
+    reference_code: string | null
+    staff_verified: boolean
+    staff_rejected: boolean
+    staff_verified_by: string | null
+    staff_verified_at: string | null
+    rejection_reason: string | null
     created_at: string
+}
+
+// Derive a simple status from the booleans
+function claimStatus(c: PaymentClaim): 'pending' | 'verified' | 'rejected' {
+    if (c.staff_verified) return 'verified'
+    if (c.staff_rejected) return 'rejected'
+    return 'pending'
 }
 
 export default function PaymentVerificationFeed({
@@ -31,7 +40,6 @@ export default function PaymentVerificationFeed({
 }) {
     const [claims, setClaims] = useState<PaymentClaim[]>(initialClaims)
     const [loading, setLoading] = useState<string | null>(null)
-    const [expandedImage, setExpandedImage] = useState<string | null>(null)
     const supabase = createClient()
 
     // Realtime subscription for new payment claims
@@ -77,7 +85,14 @@ export default function PaymentVerificationFeed({
         if (!res.error) {
             setClaims((prev) =>
                 prev.map((c) =>
-                    c.id === claimId ? { ...c, status: action, verified_by: userId } : c
+                    c.id === claimId
+                        ? {
+                              ...c,
+                              staff_verified: action === 'verified',
+                              staff_rejected: action === 'rejected',
+                              staff_verified_by: userId,
+                          }
+                        : c
                 )
             )
         }
@@ -92,7 +107,9 @@ export default function PaymentVerificationFeed({
         } else {
             setClaims((prev) =>
                 prev.map((c) =>
-                    c.id === claimId ? { ...c, status: 'verified' as const, verified_by: userId } : c
+                    c.id === claimId
+                        ? { ...c, staff_verified: true, staff_rejected: false, staff_verified_by: userId }
+                        : c
                 )
             )
             if (res.tableClosed) {
@@ -104,8 +121,8 @@ export default function PaymentVerificationFeed({
         setLoading(null)
     }
 
-    const pendingClaims = claims.filter((c) => c.status === 'pending')
-    const resolvedClaims = claims.filter((c) => c.status !== 'pending')
+    const pendingClaims = claims.filter((c) => claimStatus(c) === 'pending')
+    const resolvedClaims = claims.filter((c) => claimStatus(c) !== 'pending')
 
     if (claims.length === 0) {
         return (
@@ -142,35 +159,19 @@ export default function PaymentVerificationFeed({
                     <div className="grid grid-cols-2 gap-2 text-sm">
                         <div>
                             <span className="text-gray-500">Amount:</span>
-                            <span className="ml-1 font-bold text-gray-900">Rs. {claim.claimed_amount.toFixed(2)}</span>
+                            <span className="ml-1 font-bold text-gray-900">Rs. {claim.amount.toFixed(2)}</span>
                         </div>
-                        <div>
-                            <span className="text-gray-500">Phone:</span>
-                            <span className="ml-1 font-medium text-gray-800">{claim.customer_phone}</span>
-                        </div>
+                        {claim.reference_code && (
+                            <div>
+                                <span className="text-gray-500">Ref:</span>
+                                <span className="ml-1 font-medium text-gray-800">{claim.reference_code}</span>
+                            </div>
+                        )}
                         <div>
                             <span className="text-gray-500">Via:</span>
-                            <span className="ml-1 font-medium text-gray-800 capitalize">{claim.provider}</span>
+                            <span className="ml-1 font-medium text-gray-800 capitalize">{claim.payment_method}</span>
                         </div>
                     </div>
-
-                    {/* Screenshot */}
-                    {claim.screenshot_url && (
-                        <button
-                            onClick={() => setExpandedImage(expandedImage === claim.id ? null : claim.id)}
-                            className="flex items-center gap-1.5 text-blue-600 text-sm font-medium hover:underline"
-                        >
-                            <ImageIcon size={14} />
-                            {expandedImage === claim.id ? 'Hide screenshot' : 'View screenshot'}
-                        </button>
-                    )}
-                    {expandedImage === claim.id && claim.screenshot_url && (
-                        <img
-                            src={claim.screenshot_url}
-                            alt="Payment screenshot"
-                            className="w-full max-h-64 object-contain rounded-lg border border-gray-200 bg-gray-50"
-                        />
-                    )}
 
                     {/* Action Buttons */}
                     <div className="flex flex-col gap-2 pt-1">
@@ -222,37 +223,35 @@ export default function PaymentVerificationFeed({
                         {resolvedClaims.length} resolved claim{resolvedClaims.length > 1 ? 's' : ''}
                     </summary>
                     <div className="mt-2 space-y-2">
-                        {resolvedClaims.map((claim) => (
-                            <div
-                                key={claim.id}
-                                className={`rounded-lg border p-3 text-sm flex items-center justify-between ${
-                                    claim.status === 'verified'
-                                        ? 'bg-green-50 border-green-200'
-                                        : 'bg-red-50 border-red-200'
-                                }`}
-                            >
-                                <div>
-                                    <span className="font-medium">Rs. {claim.claimed_amount.toFixed(2)}</span>
-                                    <span className="text-gray-500 ml-2">• {claim.customer_phone}</span>
+                        {resolvedClaims.map((claim) => {
+                            const status = claimStatus(claim)
+                            return (
+                                <div
+                                    key={claim.id}
+                                    className={`rounded-lg border p-3 text-sm flex items-center justify-between ${
+                                        status === 'verified'
+                                            ? 'bg-green-50 border-green-200'
+                                            : 'bg-red-50 border-red-200'
+                                    }`}
+                                >
+                                    <div>
+                                        <span className="font-medium">Rs. {claim.amount.toFixed(2)}</span>
+                                        {claim.reference_code && (
+                                            <span className="text-gray-500 ml-2">• {claim.reference_code}</span>
+                                        )}
+                                    </div>
+                                    <span className={`font-semibold text-xs uppercase ${
+                                        status === 'verified' ? 'text-green-700' : 'text-red-700'
+                                    }`}>
+                                        {status}
+                                    </span>
                                 </div>
-                                <span className={`font-semibold text-xs uppercase ${
-                                    claim.status === 'verified' ? 'text-green-700' : 'text-red-700'
-                                }`}>
-                                    {claim.status}
-                                </span>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </div>
                 </details>
             )}
 
-            {/* Full-screen image overlay */}
-            {expandedImage && (
-                <div
-                    className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4"
-                    onClick={() => setExpandedImage(null)}
-                />
-            )}
         </div>
     )
 }

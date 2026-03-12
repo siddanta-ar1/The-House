@@ -13,9 +13,10 @@ export async function verifyPayment(
     const { error } = await supabase
         .from('payment_verifications')
         .update({
-            status: action,
-            verified_by: userId,
-            verified_at: new Date().toISOString(),
+            staff_verified: action === 'verified',
+            staff_rejected: action === 'rejected',
+            staff_verified_by: userId,
+            staff_verified_at: new Date().toISOString(),
         })
         .eq('id', claimId)
 
@@ -42,9 +43,10 @@ export async function verifyPaymentAndCloseTable(
     const { data: claim, error: claimError } = await supabase
         .from('payment_verifications')
         .update({
-            status: 'verified',
-            verified_by: userId,
-            verified_at: new Date().toISOString(),
+            staff_verified: true,
+            staff_rejected: false,
+            staff_verified_by: userId,
+            staff_verified_at: new Date().toISOString(),
         })
         .eq('id', claimId)
         .select('order_id')
