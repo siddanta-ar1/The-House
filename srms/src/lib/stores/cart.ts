@@ -10,7 +10,7 @@ const MAX_QUANTITY_PER_ITEM = 20
 
 // Generate a unique key for a cart item based on its ID + selected modifiers
 // This ensures "Latte + Oat Milk" and "Latte + Almond Milk" are separate line items
-function getCartItemKey(item: { menuItemId: string; modifiers?: CartItemModifier[] }): string {
+export function getCartItemKey(item: { menuItemId: string; modifiers?: CartItemModifier[] }): string {
     const modKey = (item.modifiers || [])
         .map((m) => m.modifierId)
         .sort()
@@ -33,9 +33,9 @@ interface CartState {
     // Actions
     setSession: (sessionId: string, restaurantSlug: string, restaurantId?: string) => void
     addItem: (item: Omit<CartItem, 'quantity'>) => void
-    removeItem: (menuItemId: string) => void
-    updateQuantity: (menuItemId: string, quantity: number) => void
-    updateSpecialRequest: (menuItemId: string, request: string) => void
+    removeItem: (cartItemKey: string) => void
+    updateQuantity: (cartItemKey: string, quantity: number) => void
+    updateSpecialRequest: (cartItemKey: string, request: string) => void
     setPromo: (promo: PromoCode | null, discount: number) => void
     setLoyaltyMember: (member: LoyaltyMember | null) => void
     setLoyaltyDiscount: (discount: number) => void
@@ -98,30 +98,30 @@ export const useCartStore = create<CartState>()(
                     return { items: [...state.items, { ...item, quantity: 1 }] }
                 }),
 
-            removeItem: (menuItemId) =>
+            removeItem: (cartItemKey) =>
                 set((state) => ({
-                    items: state.items.filter((i) => i.menuItemId !== menuItemId),
+                    items: state.items.filter((i) => getCartItemKey(i) !== cartItemKey),
                 })),
 
-            updateQuantity: (menuItemId, quantity) =>
+            updateQuantity: (cartItemKey, quantity) =>
                 set((state) => {
                     if (quantity <= 0) {
                         return {
-                            items: state.items.filter((i) => i.menuItemId !== menuItemId),
+                            items: state.items.filter((i) => getCartItemKey(i) !== cartItemKey),
                         }
                     }
                     const capped = Math.min(quantity, MAX_QUANTITY_PER_ITEM)
                     return {
                         items: state.items.map((i) =>
-                            i.menuItemId === menuItemId ? { ...i, quantity: capped } : i
+                            getCartItemKey(i) === cartItemKey ? { ...i, quantity: capped } : i
                         ),
                     }
                 }),
 
-            updateSpecialRequest: (menuItemId, request) =>
+            updateSpecialRequest: (cartItemKey, request) =>
                 set((state) => ({
                     items: state.items.map((i) =>
-                        i.menuItemId === menuItemId
+                        getCartItemKey(i) === cartItemKey
                             ? { ...i, specialRequest: request }
                             : i
                     ),

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency, timeAgo } from '@/lib/utils'
 import { CheckCircle2, ChefHat, Package, CheckCircle, Clock } from 'lucide-react'
@@ -12,9 +12,11 @@ type OrderWithItems = Order & {
 
 export default function OrderTracker({ orderId, initialOrder }: { orderId: string, initialOrder: OrderWithItems }) {
     const [order, setOrder] = useState<OrderWithItems>(initialOrder)
-    const supabase = createClient()
+    // Stable ref to prevent re-subscribe on every render
+    const supabaseRef = useRef(createClient())
 
     useEffect(() => {
+        const supabase = supabaseRef.current
         // 1. Subscribe to the specific order channel
         const channel = supabase
             .channel(`order:${orderId}`)
@@ -30,7 +32,7 @@ export default function OrderTracker({ orderId, initialOrder }: { orderId: strin
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [orderId, supabase])
+    }, [orderId])
 
     const steps = [
         { id: 'pending', label: 'Received', icon: Clock },
@@ -40,6 +42,7 @@ export default function OrderTracker({ orderId, initialOrder }: { orderId: strin
         { id: 'delivered', label: 'Delivered', icon: CheckCircle2 },
     ]
 
+    const isCancelled = order.status === 'cancelled'
     const currentStepIndex = steps.findIndex(s => s.id === order.status)
 
     // Waiter action required simulation
@@ -51,7 +54,7 @@ export default function OrderTracker({ orderId, initialOrder }: { orderId: strin
                 {/* Status Header */}
                 <div className="text-center mb-8 relative z-10">
                     <h2 className="text-2xl font-bold font-[family-name:var(--font-family)] text-gray-900">
-                        {isActionNeeded ? 'Ready for Delivery!' : 'Order Status'}
+                        {isCancelled ? 'Order Cancelled' : isActionNeeded ? 'Ready for Delivery!' : 'Order Status'}
                     </h2>
                     <p className="text-gray-500 mt-1">
                         Order #{orderId.substring(0, 5).toUpperCase()}
@@ -59,6 +62,14 @@ export default function OrderTracker({ orderId, initialOrder }: { orderId: strin
                         {timeAgo(order.placed_at)}
                     </p>
                 </div>
+
+                {/* Cancelled Banner */}
+                {isCancelled && (
+                    <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-center relative z-10">
+                        <p className="text-red-700 font-medium">This order has been cancelled.</p>
+                        <p className="text-sm text-red-500 mt-1">Please contact your waiter for assistance.</p>
+                    </div>
+                )}
 
                 {/* Stepper */}
                 <div className="relative z-10">

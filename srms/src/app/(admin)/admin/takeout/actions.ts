@@ -8,7 +8,7 @@ export async function updateTakeoutStatusAction(orderId: string, newStatus: stri
     const timestamps: Record<string, string> = {}
     const now = new Date().toISOString()
     if (newStatus === 'confirmed') timestamps.confirmed_at = now
-    if (newStatus === 'ready') timestamps.ready_at = now
+    if (newStatus === 'ready_for_pickup') timestamps.ready_at = now
     if (newStatus === 'picked_up') timestamps.picked_up_at = now
     if (newStatus === 'cancelled') timestamps.cancelled_at = now
 
@@ -27,8 +27,8 @@ export async function getTakeoutOrdersAction(restaurantId: string) {
         .from('takeout_orders')
         .select('*')
         .eq('restaurant_id', restaurantId)
-        .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
-        .order('created_at', { ascending: false })
+        .in('status', ['placed', 'confirmed', 'preparing', 'ready_for_pickup'])
+        .order('placed_at', { ascending: false })
         .limit(50)
     return { data: data || [] }
 }

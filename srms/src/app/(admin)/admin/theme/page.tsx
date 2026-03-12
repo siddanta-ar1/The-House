@@ -1,17 +1,18 @@
 import { getCurrentUser } from '@/lib/auth'
-import { createServerClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import ThemeCustomizer from '@/components/admin/ThemeCustomizer'
 
 export const revalidate = 0
 
 export default async function AdminThemePage() {
-    await getCurrentUser()
-    const supabase = await createServerClient()
+    const { restaurantId } = await getCurrentUser()
+    const supabase = await createAdminClient()
 
-    // We assume there's one settings row for simplicity (or we'd fetch by restaurant_id)
+    // Fetch settings scoped to this restaurant only
     const { data: settings } = await supabase
         .from('settings')
         .select('*')
+        .eq('restaurant_id', restaurantId)
         .limit(1)
         .single()
 

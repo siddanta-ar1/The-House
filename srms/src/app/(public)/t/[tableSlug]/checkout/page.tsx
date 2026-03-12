@@ -1,6 +1,6 @@
 'use client'
 
-import { useCartStore } from '@/lib/stores/cart'
+import { useCartStore, getCartItemKey } from '@/lib/stores/cart'
 import { useHydratedStore } from '@/lib/stores/useHydratedStore'
 import { formatCurrency } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
@@ -109,26 +109,34 @@ export default function CheckoutPage() {
                     </div>
 
                     <ul className="divide-y divide-gray-100">
-                        {items.map((item) => (
-                            <li key={item.menuItemId} className="p-4 flex gap-4 bg-white">
+                        {items.map((item) => {
+                            const key = getCartItemKey(item)
+                            const modTotal = (item.modifiers || []).reduce((s, m) => s + m.priceAdjustment, 0)
+                            return (
+                            <li key={key} className="p-4 flex gap-4 bg-white">
                                 <div className="flex-1">
                                     <h3 className="font-medium text-gray-900">{item.name}</h3>
+                                    {item.modifiers && item.modifiers.length > 0 && (
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                            {item.modifiers.map(m => m.name).join(', ')}
+                                        </p>
+                                    )}
                                     <div className="text-[var(--color-primary)] font-medium mt-1">
-                                        {formatCurrency(item.price * item.quantity)}
+                                        {formatCurrency((item.price + modTotal) * item.quantity)}
                                     </div>
                                 </div>
 
                                 <div className="flex flex-col items-end justify-between">
                                     <div className="flex items-center gap-3 bg-gray-50 rounded-full p-1 border border-gray-200">
                                         <button
-                                            onClick={() => item.quantity === 1 ? removeItem(item.menuItemId) : updateQuantity(item.menuItemId, item.quantity - 1)}
+                                            onClick={() => item.quantity === 1 ? removeItem(key) : updateQuantity(key, item.quantity - 1)}
                                             className="w-8 h-8 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 active:bg-gray-100"
                                         >
                                             {item.quantity === 1 ? <Trash2 size={16} className="text-red-500" /> : <Minus size={16} />}
                                         </button>
                                         <span className="font-medium w-4 text-center">{item.quantity}</span>
                                         <button
-                                            onClick={() => updateQuantity(item.menuItemId, item.quantity + 1)}
+                                            onClick={() => updateQuantity(key, item.quantity + 1)}
                                             className="w-8 h-8 flex items-center justify-center rounded-full bg-[var(--color-primary)] shadow-sm text-white"
                                         >
                                             <Plus size={16} />
@@ -136,7 +144,8 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
                             </li>
-                        ))}
+                            )
+                        })}
                     </ul>
                 </div>
 

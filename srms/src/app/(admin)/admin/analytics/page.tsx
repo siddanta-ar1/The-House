@@ -19,10 +19,15 @@ export default async function AnalyticsPage() {
 
     // Concurrently fetch aggregate metrics
     // In a real production app, you would use PG Materialized Views or Edge Functions for complex aggregations.
+    // Previous 7-day period for trend comparison
+    const prevWeekStart = new Date(lastWeek)
+    prevWeekStart.setDate(prevWeekStart.getDate() - 7)
+
     const [
         { data: activeOrders },
         { data: completedOrders },
         { count: totalSessionsLimit },
+        { data: prevCompletedOrders },
     ] = await Promise.all([
         // Active orders (pending -> preparing)
         supabase
@@ -44,13 +49,38 @@ export default async function AnalyticsPage() {
             .from('sessions')
             .select('id', { count: 'exact', head: true })
             .eq('restaurant_id', restaurantId)
-            .gte('opened_at', today.toISOString())
+            .gte('opened_at', today.toISOString()),
+
+        // Previous 7 days (for trend comparison)
+        supabase
+            .from('orders')
+            .select('id, total_amount')
+            .eq('restaurant_id', restaurantId)
+            .eq('status', 'delivered')
+            .gte('placed_at', prevWeekStart.toISOString())
+            .lt('placed_at', lastWeek.toISOString()),
     ])
 
     // Aggregate calculations
     const totalRevenue7d = completedOrders?.reduce((acc, order) => acc + (order.total_amount || 0), 0) || 0
     const orderCount7d = completedOrders?.length || 0
     const avgOrderValue = orderCount7d > 0 ? totalRevenue7d / orderCount7d : 0
+
+    // Previous period calculations for real trend comparison
+    const prevRevenue7d = prevCompletedOrders?.reduce((acc, order) => acc + (order.total_amount || 0), 0) || 0
+    const prevOrderCount7d = prevCompletedOrders?.length || 0
+    const prevAvgOrderValue = prevOrderCount7d > 0 ? prevRevenue7d / prevOrderCount7d : 0
+
+    function calcTrend(current: number, previous: number): { text: string; positive: boolean } {
+        if (previous === 0) return { text: current > 0 ? 'New' : '0%', positive: current >= 0 }
+        const pct = ((current - previous) / previous) * 100
+        const sign = pct >= 0 ? '+' : ''
+        return { text: `${sign}${pct.toFixed(1)}%`, positive: pct >= 0 }
+    }
+
+    const revTrend = calcTrend(totalRevenue7d, prevRevenue7d)
+    const orderTrend = calcTrend(orderCount7d, prevOrderCount7d)
+    const aovTrend = calcTrend(avgOrderValue, prevAvgOrderValue)
 
     return (
         <div className="space-y-6">
@@ -69,31 +99,31 @@ export default async function AnalyticsPage() {
                     icon={<DollarSign />}
                     title="Revenue (7 Days)"
                     value={formatCurrency(totalRevenue7d)}
-                    trend="+12.5%"
-                    positive={true}
+                    trend={revTrend.text}
+                    positive={revTrend.positive}
                     color="blue"
                 />
                 <MetricCard
                     icon={<ShoppingCart />}
                     title="Orders (7 Days)"
                     value={orderCount7d.toString()}
-                    trend="+5.2%"
-                    positive={true}
+                    trend={orderTrend.text}
+                    positive={orderTrend.positive}
                     color="emerald"
                 />
                 <MetricCard
                     icon={<TrendingUp />}
                     title="Average Order Value"
                     value={formatCurrency(avgOrderValue)}
-                    trend="-1.4%"
-                    positive={false}
+                    trend={aovTrend.text}
+                    positive={aovTrend.positive}
                     color="purple"
                 />
                 <MetricCard
                     icon={<Users />}
                     title="Sessions Today"
                     value={totalSessionsLimit?.toString() || '0'}
-                    trend="0%"
+                    trend="Today"
                     positive={true}
                     color="orange"
                 />

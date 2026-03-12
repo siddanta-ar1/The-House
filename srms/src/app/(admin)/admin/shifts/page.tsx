@@ -9,9 +9,9 @@ export default async function AdminShiftsPage() {
     const adminSupabase = await createAdminClient()
 
     const [{ data: active }, { data: recent }] = await Promise.all([
-        adminSupabase.from('staff_shifts').select('*, users(full_name, email, role)')
+        adminSupabase.from('staff_shifts').select('*, users(full_name, role_id, roles(name))')
             .eq('restaurant_id', rid).is('clock_out', null).order('clock_in', { ascending: false }),
-        adminSupabase.from('staff_shifts').select('*, users(full_name, email, role)')
+        adminSupabase.from('staff_shifts').select('*, users(full_name, role_id, roles(name))')
             .eq('restaurant_id', rid).not('clock_out', 'is', null)
             .order('clock_in', { ascending: false }).limit(50),
     ])

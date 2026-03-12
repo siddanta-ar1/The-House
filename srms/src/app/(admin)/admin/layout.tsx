@@ -1,9 +1,10 @@
 import { ReactNode } from 'react'
 import AdminSidebar from '@/components/admin/AdminSidebar'
-import { getCurrentUser } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-    const currentUser = await getCurrentUser()
+    // Only super_admin and manager roles can access admin pages
+    const currentUser = await requireRole('super_admin', 'manager')
     const roleNameRaw = currentUser.role || 'unknown'
 
     // Format role for display (e.g., "super_admin" -> "Super Admin")

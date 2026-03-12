@@ -4,22 +4,23 @@ import { useState } from 'react'
 import { updateTakeoutStatusAction } from './actions'
 import { Clock, Phone, User, CheckCircle, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { formatCurrency } from '@/lib/utils'
 import type { TakeoutOrder } from '@/types/database'
 
 const STATUS_COLORS: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800',
+    placed: 'bg-yellow-100 text-yellow-800',
     confirmed: 'bg-blue-100 text-blue-800',
     preparing: 'bg-purple-100 text-purple-800',
-    ready: 'bg-green-100 text-green-800',
+    ready_for_pickup: 'bg-green-100 text-green-800',
     picked_up: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-red-100 text-red-800',
 }
 
 const NEXT_STATUS: Record<string, string> = {
-    pending: 'confirmed',
+    placed: 'confirmed',
     confirmed: 'preparing',
-    preparing: 'ready',
-    ready: 'picked_up',
+    preparing: 'ready_for_pickup',
+    ready_for_pickup: 'picked_up',
 }
 
 export default function TakeoutDashboard({ initialOrders }: {
@@ -70,7 +71,7 @@ export default function TakeoutDashboard({ initialOrders }: {
                             </div>
                         </div>
                         <div className="text-right">
-                            <p className="font-semibold text-gray-900">${order.total_amount.toFixed(2)}</p>
+                            <p className="font-semibold text-gray-900">{formatCurrency(order.total_amount)}</p>
                             <p className="text-xs text-gray-400">#{order.id.slice(0, 8)}</p>
                         </div>
                     </div>
@@ -81,7 +82,7 @@ export default function TakeoutDashboard({ initialOrders }: {
                             {order.items.map((item, i) => (
                                 <li key={i} className="flex justify-between">
                                     <span>{item.quantity}× {item.name}</span>
-                                    <span className="text-gray-500">${(item.price * item.quantity).toFixed(2)}</span>
+                                    <span className="text-gray-500">{formatCurrency(item.price * item.quantity)}</span>
                                 </li>
                             ))}
                         </ul>

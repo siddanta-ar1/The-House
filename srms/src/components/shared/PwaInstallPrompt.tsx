@@ -64,7 +64,7 @@ export default function PwaInstallPrompt() {
             <div className="flex-1">
                 <h3 className="font-bold mb-1">Install App</h3>
                 <p className="text-sm text-gray-300 mb-3 leading-tight">
-                    Install the Smart Cafe app for faster ordering and table management.
+                    Install KKhane for faster ordering and restaurant management.
                 </p>
 
                 <div className="flex gap-2">

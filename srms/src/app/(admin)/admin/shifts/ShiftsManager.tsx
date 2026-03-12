@@ -14,7 +14,15 @@ interface ShiftRow {
     break_minutes: number
     notes: string | null
     is_approved: boolean
-    users?: { full_name: string | null; email: string; role: string } | null
+    users?: { full_name: string | null; role_id: number; roles: { name: string } | null } | null
+}
+
+function getStaffName(shift: ShiftRow) {
+    return shift.users?.full_name || '—'
+}
+
+function getStaffRole(shift: ShiftRow) {
+    return shift.users?.roles?.name || '—'
 }
 
 function duration(clockIn: string, clockOut?: string | null) {
@@ -34,7 +42,7 @@ export default function ShiftsManager({ activeShifts, recentShifts }: {
     const [recent, setRecent] = useState(recentShifts)
 
     async function handleForceClockOut(shift: ShiftRow) {
-        if (!confirm(`Force clock-out ${shift.users?.full_name || shift.users?.email}?`)) return
+        if (!confirm(`Force clock-out ${getStaffName(shift)}?`)) return
         const result = await forceClockOutAction(shift.id)
         if (result.error) { toast.error(result.error); return }
         setActive(prev => prev.filter(s => s.id !== shift.id))
@@ -74,9 +82,9 @@ export default function ShiftsManager({ activeShifts, recentShifts }: {
                                 <tr key={s.id} className="hover:bg-gray-50">
                                     <td className="px-4 py-3 flex items-center gap-2">
                                         <User size={14} className="text-gray-400" />
-                                        <span className="font-medium text-gray-900">{s.users?.full_name || s.users?.email || '—'}</span>
+                                        <span className="font-medium text-gray-900">{getStaffName(s)}</span>
                                     </td>
-                                    <td className="px-4 py-3 text-gray-500 capitalize hidden md:table-cell">{s.users?.role || '—'}</td>
+                                    <td className="px-4 py-3 text-gray-500 capitalize hidden md:table-cell">{getStaffRole(s)}</td>
                                     <td className="px-4 py-3 text-gray-600">{new Date(s.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                     <td className="px-4 py-3 text-right font-mono text-gray-700">{duration(s.clock_in)}</td>
                                     <td className="px-4 py-3 text-right">
@@ -112,8 +120,8 @@ export default function ShiftsManager({ activeShifts, recentShifts }: {
                     <tbody className="divide-y divide-gray-100">
                         {recent.map(s => (
                             <tr key={s.id} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 font-medium text-gray-900">{s.users?.full_name || s.users?.email || '—'}</td>
-                                <td className="px-4 py-3 text-gray-500 capitalize hidden md:table-cell">{s.users?.role || '—'}</td>
+                                <td className="px-4 py-3 font-medium text-gray-900">{getStaffName(s)}</td>
+                                <td className="px-4 py-3 text-gray-500 capitalize hidden md:table-cell">{getStaffRole(s)}</td>
                                 <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{new Date(s.clock_in).toLocaleDateString()}</td>
                                 <td className="px-4 py-3 text-gray-600 text-xs">
                                     {new Date(s.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

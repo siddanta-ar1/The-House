@@ -9,12 +9,23 @@ import { Redis } from '@upstash/redis'
 
 // Serverless-safe rate limiting via Upstash Redis
 // Each IP gets 5 requests per 60-second sliding window
-const ratelimit = new Ratelimit({
-    redis: Redis.fromEnv(),
-    limiter: Ratelimit.slidingWindow(5, '60 s'),
-    analytics: true,
-    prefix: 'srms:order-ratelimit',
-})
+// Lazily initialized so missing env vars don't crash the entire module
+let _ratelimit: Ratelimit | null = null
+function getRatelimit(): Ratelimit | null {
+    if (_ratelimit) return _ratelimit
+    try {
+        _ratelimit = new Ratelimit({
+            redis: Redis.fromEnv(),
+            limiter: Ratelimit.slidingWindow(5, '60 s'),
+            analytics: true,
+            prefix: 'srms:order-ratelimit',
+        })
+        return _ratelimit
+    } catch {
+        console.warn('Upstash Redis not configured — rate limiting disabled')
+        return null
+    }
+}
 
 export async function placeOrder(
     sessionId: string,
@@ -36,11 +47,13 @@ export async function placeOrder(
     const headersList = await headers()
     const ip = headersList.get('x-forwarded-for') || 'fallback-ip'
 
-    const { success, remaining } = await ratelimit.limit(ip)
-
-    if (!success) {
-        console.warn(`Rate limit exceeded for IP: ${ip} (remaining: ${remaining})`)
-        return { error: 'You are placing orders too quickly. Please wait a minute and try again.' }
+    const ratelimit = getRatelimit()
+    if (ratelimit) {
+        const { success, remaining } = await ratelimit.limit(ip)
+        if (!success) {
+            console.warn(`Rate limit exceeded for IP: ${ip} (remaining: ${remaining})`)
+            return { error: 'You are placing orders too quickly. Please wait a minute and try again.' }
+        }
     }
 
     // 2. Proceed with Order Placement

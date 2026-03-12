@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useCartStore } from '@/lib/stores/cart'
+import { useCartStore, getCartItemKey } from '@/lib/stores/cart'
 import { useHydratedStore } from '@/lib/stores/useHydratedStore'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Minus, X, Check } from 'lucide-react'
@@ -25,6 +25,7 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
 
     const cartItem = items.find((i) => i.menuItemId === item.id)
     const quantity = cartItem?.quantity || 0
+    const cartKey = cartItem ? getCartItemKey(cartItem) : ''
 
     const hasModifiers = item.modifier_groups && item.modifier_groups.length > 0
 
@@ -46,7 +47,7 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
         }
 
         if (quantity > 0) {
-            updateQuantity(item.id, quantity + 1)
+            updateQuantity(cartKey, quantity + 1)
         } else {
             addItem({
                 menuItemId: item.id,
@@ -81,12 +82,10 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
             }
         }
 
-        const modifierTotal = modifiers.reduce((s, m) => s + m.priceAdjustment, 0)
-
         addItem({
             menuItemId: item.id,
             name: item.name,
-            price: item.price + modifierTotal,
+            price: item.price, // base price only — modifier totals are computed in cart.totalAmount()
             imageUrl: item.image_url || undefined,
             modifiers,
         })
@@ -110,9 +109,9 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
 
     const handleRemove = () => {
         if (quantity > 1) {
-            updateQuantity(item.id, quantity - 1)
+            updateQuantity(cartKey, quantity - 1)
         } else if (quantity === 1) {
-            removeItem(item.id)
+            removeItem(cartKey)
         }
     }
 

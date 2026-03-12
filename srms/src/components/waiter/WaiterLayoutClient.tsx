@@ -1,8 +1,8 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { LogOut, Settings } from 'lucide-react'
-import Link from 'next/link'
+import { LogOut } from 'lucide-react'
+
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -34,9 +34,6 @@ export default function WaiterLayoutClient({ children }: { children: ReactNode }
                 </div>
 
                 <div className="flex items-center gap-2 md:gap-4">
-                    <Link href="/admin/settings" className="p-2 text-gray-400 hover:text-gray-900 transition rounded-full hover:bg-gray-100">
-                        <Settings size={18} />
-                    </Link>
                     <div className="h-4 w-px bg-gray-300 hidden md:block"></div>
                     <button
                         onClick={handleSignOut}

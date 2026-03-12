@@ -36,13 +36,13 @@ export default async function AdminDashboardPage() {
             .eq('restaurant_id', restaurantId)
             .order('placed_at', { ascending: false })
             .limit(5),
-        // Actual revenue: sum ALL delivered/ready orders placed today
+        // Actual revenue: only count delivered orders (completed & served)
         supabase
             .from('orders')
             .select('total_amount')
             .eq('restaurant_id', restaurantId)
             .gte('placed_at', today.toISOString())
-            .in('status', ['delivered', 'ready', 'preparing', 'confirmed', 'pending']),
+            .eq('status', 'delivered'),
     ])
 
     // Actual revenue from all of today's non-cancelled orders

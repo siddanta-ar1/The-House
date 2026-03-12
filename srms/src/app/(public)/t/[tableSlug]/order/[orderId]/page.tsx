@@ -2,6 +2,7 @@ import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import OrderTracker from '@/components/customer/OrderTracker'
 import InvoiceBanner from '@/components/customer/InvoiceBanner'
+import Link from 'next/link'
 
 export const revalidate = 0 // Don't cache this page - fetch fresh DB state
 
@@ -62,8 +63,11 @@ export default async function OrderPage(props: {
                 )}
 
                 {/* Support/Extra Actions */}
-                <div className="mt-8 text-center text-sm text-gray-500">
-                    <p>Need help? Ask a waiter for assistance.</p>
+                <div className="mt-8 text-center space-y-3">
+                    <Link href={`/t/${params.tableSlug}`} className="inline-block text-[var(--color-primary)] font-medium text-sm hover:underline">
+                        ← Back to Menu
+                    </Link>
+                    <p className="text-sm text-gray-500">Need help? Ask a waiter for assistance.</p>
                 </div>
             </main>
         </div>
