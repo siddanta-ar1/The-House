@@ -13,9 +13,10 @@ import { ArrowLeft, Clock, Loader2, ShoppingBag } from 'lucide-react'
 interface TakeoutFormProps {
     restaurantId: string
     restaurantName: string
+    restaurantSlug: string
 }
 
-export default function TakeoutForm({ restaurantId, restaurantName }: TakeoutFormProps) {
+export default function TakeoutForm({ restaurantId, restaurantName, restaurantSlug }: TakeoutFormProps) {
     const items = useHydratedStore(useCartStore, (s) => s.items)
     const totalAmount = useCartStore((s) => s.totalAmount)
     const clearCart = useCartStore((s) => s.clearCart)
@@ -29,8 +30,6 @@ export default function TakeoutForm({ restaurantId, restaurantName }: TakeoutFor
     const [promoDiscount, setPromoDiscount] = useState(0)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState('')
-    const [success, setSuccess] = useState(false)
-    const [orderNumber, setOrderNumber] = useState('')
     const router = useRouter()
 
     // Generate time slots (every 15 min for next 4 hours)
@@ -78,38 +77,10 @@ export default function TakeoutForm({ restaurantId, restaurantName }: TakeoutFor
             setError(result.error)
             setIsSubmitting(false)
         } else if (result.order) {
-            setOrderNumber(result.order.id.slice(0, 8).toUpperCase())
-            setSuccess(true)
             clearCart()
+            // Redirect to order tracking page
+            router.push(`/takeout/${restaurantSlug}/order/${result.order.id}`)
         }
-    }
-
-    if (success) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <ShoppingBag className="w-8 h-8 text-green-600" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Order Placed!</h2>
-                    <p className="text-gray-600 mb-4">
-                        Your order #{orderNumber} has been received.
-                    </p>
-                    <p className="text-sm text-gray-500 mb-6">
-                        Pickup at: {pickupTime ? formatTime(pickupTime) : 'TBD'}
-                    </p>
-                    <p className="text-lg font-semibold text-gray-900 mb-6">
-                        Total: {formatCurrency(finalTotal)}
-                    </p>
-                    <button
-                        onClick={() => router.push('/')}
-                        className="w-full bg-gray-900 text-white rounded-xl py-3 font-medium"
-                    >
-                        Done
-                    </button>
-                </div>
-            </div>
-        )
     }
 
     if (!items || items.length === 0) {

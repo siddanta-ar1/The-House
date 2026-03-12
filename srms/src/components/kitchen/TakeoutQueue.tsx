@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { updateTakeoutStatus } from '@/app/api/takeout/actions'
 import { formatCurrency } from '@/lib/utils'
 import type { TakeoutOrder } from '@/types/database'
-import { Clock, Phone, User, CheckCircle2, XCircle } from 'lucide-react'
+import { Phone, User, CheckCircle2, XCircle, Timer } from 'lucide-react'
+import { playKitchenPing } from '@/lib/audio'
 
 interface TakeoutQueueProps {
     restaurantId: string
@@ -26,6 +27,38 @@ const STATUS_BADGE: Record<string, string> = {
     ready_for_pickup: 'bg-green-100 text-green-800',
     picked_up: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-red-100 text-red-800',
+}
+
+/** Returns a live "Due in Xm" / "Overdue Xm" string for a pickup_time */
+function useCountdown(pickupTime: string) {
+    const calc = useCallback(() => {
+        const diff = new Date(pickupTime).getTime() - Date.now()
+        const mins = Math.round(diff / 60_000)
+        if (mins > 60) return { label: `Due in ${Math.floor(mins / 60)}h ${mins % 60}m`, overdue: false }
+        if (mins > 0) return { label: `Due in ${mins}m`, overdue: false }
+        if (mins === 0) return { label: 'Due now', overdue: false }
+        return { label: `Overdue ${Math.abs(mins)}m`, overdue: true }
+    }, [pickupTime])
+
+    const [info, setInfo] = useState(() => calc())
+
+    useEffect(() => {
+        const id = setInterval(() => setInfo(calc()), 15_000) // update every 15s
+        return () => clearInterval(id)
+    }, [calc])
+
+    return info
+}
+
+/** Small countdown badge rendered per order card */
+function CountdownBadge({ pickupTime }: { pickupTime: string }) {
+    const { label, overdue } = useCountdown(pickupTime)
+    return (
+        <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full ${overdue ? 'bg-red-100 text-red-700 animate-pulse' : 'bg-amber-100 text-amber-800'}`}>
+            <Timer size={12} />
+            {label}
+        </span>
+    )
 }
 
 export default function TakeoutQueue({ restaurantId, initialOrders }: TakeoutQueueProps) {
@@ -49,6 +82,7 @@ export default function TakeoutQueue({ restaurantId, initialOrders }: TakeoutQue
                 (payload) => {
                     if (payload.eventType === 'INSERT') {
                         setOrders((prev) => [payload.new as TakeoutOrder, ...prev])
+                        playKitchenPing() // Audio alert for new takeout order
                     } else if (payload.eventType === 'UPDATE') {
                         setOrders((prev) =>
                             prev.map((o) => (o.id === payload.new.id ? (payload.new as TakeoutOrder) : o))
@@ -72,8 +106,8 @@ export default function TakeoutQueue({ restaurantId, initialOrders }: TakeoutQue
 
     return (
         <div className="space-y-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-                Active Takeout Orders ({activeOrders.length})
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                🥡 Takeout Orders ({activeOrders.length})
             </h2>
 
             {activeOrders.length === 0 && (
@@ -98,6 +132,14 @@ export default function TakeoutQueue({ restaurantId, initialOrders }: TakeoutQue
                                     </span>
                                 </div>
 
+                                {/* Countdown Timer */}
+                                <div className="flex items-center justify-between">
+                                    <CountdownBadge pickupTime={order.pickup_time} />
+                                    <span className="text-xs text-gray-400">
+                                        Pickup: {new Date(order.pickup_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                </div>
+
                                 {/* Customer */}
                                 <div className="space-y-1 text-sm">
                                     <div className="flex items-center gap-1.5 text-gray-700">
@@ -107,12 +149,6 @@ export default function TakeoutQueue({ restaurantId, initialOrders }: TakeoutQue
                                     <div className="flex items-center gap-1.5 text-gray-500">
                                         <Phone size={14} />
                                         <span>{order.customer_phone}</span>
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-gray-500">
-                                        <Clock size={14} />
-                                        <span>
-                                            Pickup: {new Date(order.pickup_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
                                     </div>
                                 </div>
 

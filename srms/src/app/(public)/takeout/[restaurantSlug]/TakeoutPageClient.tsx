@@ -41,7 +41,7 @@ export default function TakeoutPageClient({ restaurant, categories, menuItems }:
                 <div className="max-w-lg mx-auto px-4 py-8">
                     <button onClick={() => setShowCheckout(false)}
                         className="text-sm text-gray-500 mb-4 hover:text-gray-900">← Back to menu</button>
-                    <TakeoutForm restaurantId={restaurant.id} restaurantName={restaurant.name} />
+                    <TakeoutForm restaurantId={restaurant.id} restaurantName={restaurant.name} restaurantSlug={restaurant.slug} />
                 </div>
             </div>
         )

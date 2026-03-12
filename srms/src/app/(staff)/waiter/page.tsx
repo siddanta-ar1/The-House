@@ -5,6 +5,7 @@ import ServiceRequestFeed from '@/components/waiter/ServiceRequestFeed'
 import StaffShiftClock from '@/components/shared/StaffShiftClock'
 import PaymentVerificationFeed from '@/components/waiter/PaymentVerificationFeed'
 import WaiterOrderFeed from '@/components/waiter/WaiterOrderFeed'
+import WaiterTakeoutFeed from '@/components/waiter/WaiterTakeoutFeed'
 import { getRestaurantFeatures } from '@/lib/features'
 
 export const revalidate = 0
@@ -40,7 +41,7 @@ export default async function WaiterPage() {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
     // Fetch feature flags + all parallel data
-    const [features, { data: serviceRequests }, { data: activeShift }, { data: shiftHistory }, { data: paymentClaims }, { data: activeOrders }] = await Promise.all([
+    const [features, { data: serviceRequests }, { data: activeShift }, { data: shiftHistory }, { data: paymentClaims }, { data: activeOrders }, { data: readyTakeouts }] = await Promise.all([
         getRestaurantFeatures(restaurantId),
         adminSupabase
             .from('service_requests')
@@ -80,6 +81,13 @@ export default async function WaiterPage() {
             .eq('restaurant_id', restaurantId)
             .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
             .order('placed_at', { ascending: true }),
+        adminSupabase
+            .from('takeout_orders')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .eq('status', 'ready_for_pickup')
+            .order('pickup_time', { ascending: true })
+            .limit(20),
     ])
 
     return (
@@ -101,6 +109,15 @@ export default async function WaiterPage() {
                     initialClaims={(paymentClaims || []) as any[]}
                     restaurantId={restaurantId}
                     userId={userId}
+                />
+            )}
+
+            {/* Takeout Pickup Feed — gated */}
+            {features?.takeoutEnabled && (
+                <WaiterTakeoutFeed
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    initialOrders={(readyTakeouts || []) as any[]}
+                    restaurantId={restaurantId}
                 />
             )}
 

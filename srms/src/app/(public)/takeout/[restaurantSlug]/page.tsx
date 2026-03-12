@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import TakeoutPageClient from './TakeoutPageClient'
 
-export const revalidate = 60
+export const revalidate = 0
 
 export default async function TakeoutPage({ params }: { params: Promise<{ restaurantSlug: string }> }) {
     const { restaurantSlug } = await params
@@ -11,7 +11,7 @@ export default async function TakeoutPage({ params }: { params: Promise<{ restau
     // Find restaurant by slug
     const { data: restaurant } = await supabase
         .from('restaurants')
-        .select('id, name, slug, description, logo_url, settings')
+        .select('id, name, slug, logo_url')
         .eq('slug', restaurantSlug)
         .single()
 
@@ -22,7 +22,7 @@ export default async function TakeoutPage({ params }: { params: Promise<{ restau
         .from('menu_categories')
         .select('id, name, sort_order')
         .eq('restaurant_id', restaurant.id)
-        .eq('is_active', true)
+        .eq('is_visible', true)
         .order('sort_order')
 
     const { data: items } = await supabase
@@ -30,11 +30,11 @@ export default async function TakeoutPage({ params }: { params: Promise<{ restau
         .select('id, name, description, price, image_url, category_id, is_available')
         .eq('restaurant_id', restaurant.id)
         .eq('is_available', true)
-        .order('sort_order')
+        .order('name')
 
     return (
         <TakeoutPageClient
-            restaurant={restaurant}
+            restaurant={{ ...restaurant, description: null }}
             categories={categories || []}
             menuItems={items || []}
         />

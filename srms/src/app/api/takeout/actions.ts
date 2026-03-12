@@ -153,5 +153,35 @@ export async function updateTakeoutStatus(
     }
 
     revalidatePath('/takeout')
+    revalidatePath('/waiter')
+    revalidatePath('/admin/takeout')
+    return {}
+}
+
+/**
+ * Complete a takeout order: mark as picked_up + paid.
+ * Used by the waiter/cashier when the customer arrives to pay and collect.
+ */
+export async function completeTakeoutOrder(
+    orderId: string
+): Promise<{ error?: string }> {
+    const supabase = await createAdminClient()
+
+    const { error } = await supabase
+        .from('takeout_orders')
+        .update({
+            status: 'picked_up',
+            payment_status: 'paid',
+            picked_up_at: new Date().toISOString(),
+        })
+        .eq('id', orderId)
+
+    if (error) {
+        return { error: 'Failed to complete order.' }
+    }
+
+    revalidatePath('/waiter')
+    revalidatePath('/admin/takeout')
+    revalidatePath('/takeout')
     return {}
 }
