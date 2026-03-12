@@ -86,6 +86,7 @@ export default async function WaiterPage() {
             {/* Nepal Payment Verification Feed — gated */}
             {features?.nepalPayEnabled && (
                 <PaymentVerificationFeed
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     initialClaims={(paymentClaims || []) as any[]}
                     restaurantId={restaurantId}
                     userId={userId}
@@ -95,6 +96,7 @@ export default async function WaiterPage() {
             {/* Service Request Feed — gated */}
             {features?.serviceRequestsEnabled !== false && (
                 <ServiceRequestFeed
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     initialRequests={(serviceRequests || []) as any[]}
                     restaurantId={restaurantId}
                     userId={userId}

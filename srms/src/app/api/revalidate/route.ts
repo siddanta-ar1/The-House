@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
         // type can be 'page' or 'layout' (defaults to 'page')
         revalidatePath(path, type === 'layout' ? 'layout' : 'page')
         return NextResponse.json({ revalidated: true, now: Date.now(), path })
-    } catch (err) {
+    } catch {
         return NextResponse.json({ message: 'Error parsing request body' }, { status: 400 })
     }
 }

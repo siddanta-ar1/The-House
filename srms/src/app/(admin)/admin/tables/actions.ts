@@ -27,7 +27,7 @@ export async function addTableAction(restaurantId: string, label: string, capaci
     return { data }
 }
 
-export async function updateTableAction(id: string, updates: any) {
+export async function updateTableAction(id: string, updates: Record<string, unknown>) {
     const supabase = await createAdminClient()
     const { error } = await supabase
         .from('tables')

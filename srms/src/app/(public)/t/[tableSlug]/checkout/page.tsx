@@ -16,7 +16,6 @@ import { useParams } from 'next/navigation'
 
 export default function CheckoutPage() {
     const params = useParams<{ tableSlug: string }>()
-    const tableSlug = params.tableSlug
     const features = useFeatures()
     const items = useHydratedStore(useCartStore, (s) => s.items)
     const sessionId = useHydratedStore(useCartStore, (s) => s.sessionId)
@@ -39,7 +38,6 @@ export default function CheckoutPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
     const [showSplit, setShowSplit] = useState(false)
-    const [orderResult, setOrderResult] = useState<{ pointsEarned?: number } | null>(null)
     const router = useRouter()
 
     if (items.length === 0) {
@@ -83,9 +81,6 @@ export default function CheckoutPage() {
             setErrorMsg(res.error)
             setIsSubmitting(false)
         } else if (res.orderId) {
-            if (res.pointsEarned) {
-                setOrderResult({ pointsEarned: res.pointsEarned })
-            }
             clearCart()
             router.push(`/t/${params.tableSlug}/order/${res.orderId}`)
         }

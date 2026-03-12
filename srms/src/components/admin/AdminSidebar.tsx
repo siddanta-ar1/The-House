@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { LayoutDashboard, Users, UtensilsCrossed, Settings, LogOut, BarChart3, Palette, Grid3X3, Menu, X, TrendingUp, ShoppingBag, Tag, Heart, DollarSign, Package, FileText, Truck, Clock, Building } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Users, UtensilsCrossed, Settings, LogOut, BarChart3, Palette, Grid3X3, Menu, X, TrendingUp, ShoppingBag, Tag, Heart, DollarSign, Package, FileText, Truck, Clock, Building } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
@@ -12,15 +12,20 @@ export default function AdminSidebar({ userRole }: { userRole?: string }) {
     const router = useRouter()
     const supabase = createClient()
     const [isOpen, setIsOpen] = useState(false)
+    const prevPathRef = useRef(pathname)
 
     // Auto-close drawer on route change
     useEffect(() => {
-        setIsOpen(false)
+        if (prevPathRef.current !== pathname) {
+            prevPathRef.current = pathname
+            // Defer to avoid synchronous setState within render cycle
+            queueMicrotask(() => setIsOpen(false))
+        }
     }, [pathname])
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
-        router.push('/admin')
+        router.push('/login')
         router.refresh()
     }
 

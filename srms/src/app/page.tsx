@@ -40,7 +40,7 @@ export default async function Home() {
                         />
                     </div>
                     <Link
-                        href="/admin"
+                        href="/login"
                         className="px-5 py-2.5 text-sm font-semibold bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl hover:bg-white/20 transition-all"
                     >
                         Staff Login
@@ -66,7 +66,7 @@ export default async function Home() {
                         </p>
                         <div className="mt-10 flex flex-wrap gap-4">
                             <Link
-                                href="/admin"
+                                href="/login"
                                 className="inline-flex items-center gap-2 px-7 py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl shadow-lg shadow-orange-500/25 transition-all active:scale-95"
                             >
                                 Get Started <ArrowRight size={18} />
@@ -121,7 +121,7 @@ export default async function Home() {
                         <span>Smart Restaurant Management System</span>
                     </div>
                     <div className="flex gap-6">
-                        <Link href="/admin" className="hover:text-white transition">Staff Login</Link>
+                        <Link href="/login" className="hover:text-white transition">Staff Login</Link>
                     </div>
                 </div>
             </footer>

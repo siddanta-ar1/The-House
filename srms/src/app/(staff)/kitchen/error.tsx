@@ -3,6 +3,7 @@
 import { AlertTriangle, RefreshCcw } from 'lucide-react'
 
 export default function KitchenError({ error, reset }: { error: Error & { digest?: string }, reset: () => void }) {
+    void error
     return (
         <div className="flex flex-col items-center justify-center h-full bg-gray-900 text-gray-100 p-8 text-center">
             <div className="w-16 h-16 bg-red-900/50 text-red-400 rounded-full flex items-center justify-center mb-6">

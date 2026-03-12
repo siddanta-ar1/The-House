@@ -34,7 +34,11 @@ export async function POST(req: Request) {
             // Update order status in DB — using admin client to bypass RLS
             const { error } = await supabase
                 .from('orders')
-                .update({ status: 'confirmed' })
+                .update({
+                    status: 'confirmed',
+                    payment_status: 'paid',
+                    confirmed_at: new Date().toISOString(),
+                })
                 .eq('id', orderId)
 
             if (error) {

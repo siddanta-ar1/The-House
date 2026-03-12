@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Users, Divide, CreditCard, Loader2, Check } from 'lucide-react'
+import { Users, Divide, Loader2, Check } from 'lucide-react'
 import { createBillSplit } from '@/app/api/billing/actions'
 import { formatCurrency } from '@/lib/utils'
 import type { SplitType } from '@/types/database'

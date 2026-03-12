@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { getCurrentUser } from '@/lib/auth'
 import { formatCurrency } from '@/lib/utils'
-import { ShoppingBag, Filter } from 'lucide-react'
+import { ShoppingBag } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +59,7 @@ export default async function AdminOrdersPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
+                            {/* eslint-disable @typescript-eslint/no-explicit-any */}
                             {orders?.map((order: any) => {
                                 const tableLabel = order.sessions?.tables?.label || '—'
                                 const itemCount = order.order_items?.length || 0
@@ -96,6 +97,7 @@ export default async function AdminOrdersPage() {
 
                 {/* Mobile Card List */}
                 <div className="md:hidden divide-y divide-gray-100">
+                    {/* eslint-disable @typescript-eslint/no-explicit-any */}
                     {orders?.map((order: any) => {
                         const tableLabel = order.sessions?.tables?.label || '—'
                         const itemNames = order.order_items?.map((i: any) => `${i.quantity}x ${i.menu_items?.name}`).join(', ') || ''

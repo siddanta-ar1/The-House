@@ -11,7 +11,7 @@ const ROLE_LANDING: Record<string, string> = {
     waiter: '/waiter',
 }
 
-export async function loginAction(prevState: any, formData: FormData) {
+export async function loginAction(prevState: { error: string | null }, formData: FormData) {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
     const explicitRedirect = formData.get('redirect') as string

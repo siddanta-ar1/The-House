@@ -1,12 +1,6 @@
-import { LoginForm } from './LoginForm'
+import { redirect } from 'next/navigation'
 
-export default async function AdminLoginPage(props: { searchParams: Promise<{ redirect?: string }> }) {
-    const searchParams = await props.searchParams;
-    const redirectTo = searchParams.redirect || '/admin/dashboard'
-
-    return (
-        <div className="flex h-screen w-screen items-center justify-center bg-[var(--color-secondary)]">
-            <LoginForm redirectTo={redirectTo} />
-        </div>
-    )
+// /admin now redirects to the dashboard — login has moved to /login
+export default function AdminIndexPage() {
+    redirect('/admin/dashboard')
 }

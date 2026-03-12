@@ -21,7 +21,7 @@ export async function addCategoryAction(restaurantId: string, name: string, sort
     return { data }
 }
 
-export async function updateCategoryAction(id: string, updates: any) {
+export async function updateCategoryAction(id: string, updates: Record<string, unknown>) {
     const supabase = await createAdminClient()
     const { error } = await supabase
         .from('menu_categories')
@@ -45,7 +45,7 @@ export async function deleteCategoryAction(id: string) {
     return { success: true }
 }
 
-export async function addItemAction(item: any) {
+export async function addItemAction(item: Record<string, unknown>) {
     const supabase = await createAdminClient()
     const { data, error } = await supabase
         .from('menu_items')
@@ -58,7 +58,7 @@ export async function addItemAction(item: any) {
     return { data }
 }
 
-export async function updateItemAction(id: string, updates: any) {
+export async function updateItemAction(id: string, updates: Record<string, unknown>) {
     const supabase = await createAdminClient()
     const { error } = await supabase
         .from('menu_items')

@@ -16,7 +16,7 @@ export default function UnauthorizedPage() {
                 </p>
                 <div className="flex flex-col gap-3">
                     <Link
-                        href="/admin"
+                        href="/login"
                         className="inline-flex items-center justify-center rounded-xl bg-[var(--color-secondary)] px-6 py-3 text-sm font-semibold text-white hover:opacity-90 transition-colors"
                     >
                         Go to Login

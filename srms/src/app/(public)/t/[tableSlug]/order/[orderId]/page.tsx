@@ -51,6 +51,7 @@ export default async function OrderPage(props: {
                 <OrderTracker orderId={params.orderId} initialOrder={order} />
 
                 {/* Invoice / PAN display */}
+                {/* eslint-disable @typescript-eslint/no-explicit-any */}
                 {(order as any).invoice_number && (
                     <InvoiceBanner
                         invoiceNumber={(order as any).invoice_number}

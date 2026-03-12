@@ -58,7 +58,7 @@ export async function proxy(request: NextRequest) {
         const { user, supabaseResponse } = await updateSession(request)
 
         if (!user) {
-            const loginUrl = new URL('/admin', request.url)
+            const loginUrl = new URL('/login', request.url)
             loginUrl.searchParams.set('redirect', pathname)
             return NextResponse.redirect(loginUrl)
         }

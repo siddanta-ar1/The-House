@@ -1,16 +1,9 @@
 import { ReactNode } from 'react'
 import AdminSidebar from '@/components/admin/AdminSidebar'
-import { getOptionalUser } from '@/lib/auth'
+import { getCurrentUser } from '@/lib/auth'
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-    const currentUser = await getOptionalUser()
-
-    // If not logged in, render children directly (the login page at /admin)
-    // This prevents the infinite redirect loop
-    if (!currentUser) {
-        return <>{children}</>
-    }
-
+    const currentUser = await getCurrentUser()
     const roleNameRaw = currentUser.role || 'unknown'
 
     // Format role for display (e.g., "super_admin" -> "Super Admin")

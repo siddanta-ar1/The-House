@@ -62,7 +62,7 @@ export async function createTakeoutOrder(
         .eq('restaurant_id', input.restaurantId)
         .single()
 
-    const taxRate = (settings?.features_v2 as Record<string, unknown>)?.tax_rate_percent as number || 0
+    const taxRate = (settings?.features_v2 as Record<string, unknown>)?.defaultTaxRate as number || 0
     const taxAmount = Math.round((subtotal - discountAmount) * taxRate / 100 * 100) / 100
     const totalAmount = subtotal - discountAmount + taxAmount
 
@@ -89,12 +89,12 @@ export async function createTakeoutOrder(
             customer_email: input.customerEmail || null,
             pickup_time: input.pickupTime,
             items: itemsPayload,
-            subtotal,
+            subtotal_amount: subtotal,
             discount_amount: discountAmount,
             tax_amount: taxAmount,
             total_amount: totalAmount,
             customer_note: input.customerNote || null,
-            status: 'pending',
+            status: 'placed',
         })
         .select()
         .single()
@@ -131,18 +131,17 @@ export async function getTakeoutOrders(
 
 export async function updateTakeoutStatus(
     orderId: string,
-    status: 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'cancelled'
+    status: 'confirmed' | 'preparing' | 'ready_for_pickup' | 'picked_up' | 'cancelled'
 ): Promise<{ error?: string }> {
     const supabase = await createAdminClient()
 
-    const updateData: Record<string, unknown> = {
-        status,
-        updated_at: new Date().toISOString(),
-    }
+    const updateData: Record<string, unknown> = { status }
+    const now = new Date().toISOString()
 
-    if (status === 'picked_up') {
-        updateData.actual_pickup_time = new Date().toISOString()
-    }
+    if (status === 'confirmed') updateData.confirmed_at = now
+    if (status === 'ready_for_pickup') updateData.ready_at = now
+    if (status === 'picked_up') updateData.picked_up_at = now
+    if (status === 'cancelled') updateData.cancelled_at = now
 
     const { error } = await supabase
         .from('takeout_orders')

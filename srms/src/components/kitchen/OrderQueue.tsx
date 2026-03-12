@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { playKitchenPing } from '@/lib/audio'
 import { timeAgo } from '@/lib/utils'
@@ -29,8 +29,6 @@ const ORDER_SELECT = `
 export default function OrderQueue({ initialOrders, restaurantId }: { initialOrders: KitchenOrder[], restaurantId: string }) {
     const [orders, setOrders] = useState<KitchenOrder[]>(initialOrders)
     const supabase = createClient()
-    // Track if we've hydrated from server to avoid duplicate fetches
-    const isHydrated = useRef(true)
 
     useEffect(() => {
         const channel = supabase

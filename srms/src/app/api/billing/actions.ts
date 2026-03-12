@@ -118,6 +118,7 @@ export async function payBillSplitItem(
         .from('bill_split_items')
         .update({
             payment_status: 'paid',
+            payment_method: paymentMethod,
             paid_at: new Date().toISOString(),
         })
         .eq('id', splitItemId)

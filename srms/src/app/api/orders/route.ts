@@ -25,10 +25,10 @@ export async function GET(request: Request) {
             id, 
             status, 
             total_amount, 
-            created_at,
-            table_id,
+            placed_at,
+            session_id,
             order_items (
-                id, menu_item_id, quantity, unit_price, notes
+                id, menu_item_id, quantity, unit_price, special_request
             )
         `)
         .eq('restaurant_id', restaurantId)

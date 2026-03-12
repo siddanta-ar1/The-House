@@ -13,17 +13,17 @@ interface TakeoutQueueProps {
 }
 
 const STATUS_FLOW: Record<string, { next: string; label: string; color: string }> = {
-    pending: { next: 'confirmed', label: 'Confirm', color: 'bg-blue-600' },
+    placed: { next: 'confirmed', label: 'Confirm', color: 'bg-blue-600' },
     confirmed: { next: 'preparing', label: 'Start Prep', color: 'bg-yellow-600' },
-    preparing: { next: 'ready', label: 'Mark Ready', color: 'bg-green-600' },
-    ready: { next: 'picked_up', label: 'Picked Up', color: 'bg-gray-700' },
+    preparing: { next: 'ready_for_pickup', label: 'Mark Ready', color: 'bg-green-600' },
+    ready_for_pickup: { next: 'picked_up', label: 'Picked Up', color: 'bg-gray-700' },
 }
 
 const STATUS_BADGE: Record<string, string> = {
-    pending: 'bg-orange-100 text-orange-800',
+    placed: 'bg-orange-100 text-orange-800',
     confirmed: 'bg-blue-100 text-blue-800',
     preparing: 'bg-yellow-100 text-yellow-800',
-    ready: 'bg-green-100 text-green-800',
+    ready_for_pickup: 'bg-green-100 text-green-800',
     picked_up: 'bg-gray-100 text-gray-600',
     cancelled: 'bg-red-100 text-red-800',
 }
@@ -63,7 +63,7 @@ export default function TakeoutQueue({ restaurantId, initialOrders }: TakeoutQue
 
     async function handleStatusChange(orderId: string, newStatus: string) {
         setLoading(orderId)
-        await updateTakeoutStatus(orderId, newStatus as 'confirmed' | 'preparing' | 'ready' | 'picked_up' | 'cancelled')
+        await updateTakeoutStatus(orderId, newStatus as 'confirmed' | 'preparing' | 'ready_for_pickup' | 'picked_up' | 'cancelled')
         setLoading(null)
     }
 

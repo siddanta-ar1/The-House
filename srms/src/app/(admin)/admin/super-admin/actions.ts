@@ -76,7 +76,7 @@ export async function getSaasMetrics() {
 
     // Count by tier
     const tiers: Record<string, number> = { free: 0, basic: 0, pro: 0, enterprise: 0 }
-    tierBreakdown?.forEach((r: any) => {
+    tierBreakdown?.forEach((r: { subscription_tier?: string }) => {
         const tier = r.subscription_tier || 'free'
         tiers[tier] = (tiers[tier] || 0) + 1
     })

@@ -3,6 +3,7 @@
 import { AlertCircle, RefreshCcw } from 'lucide-react'
 
 export default function WaiterError({ error, reset }: { error: Error & { digest?: string }, reset: () => void }) {
+    void error
     return (
         <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center">
             <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-6">

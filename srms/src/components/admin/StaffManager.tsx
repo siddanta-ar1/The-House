@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MoreVertical, Shield, ChefHat, Users, User, Check, AlertTriangle, Loader2, Ban } from 'lucide-react'
+import { Shield, ChefHat, Users, User, Check, AlertTriangle, Loader2 } from 'lucide-react'
 import { updateStaffRoleAction, toggleStaffStatusAction } from '@/app/(admin)/admin/staff/actions'
 import { toast } from 'react-hot-toast'
 import { useConfirmStore } from '@/lib/stores/confirm'
@@ -13,7 +13,8 @@ type StaffMember = {
     is_active: boolean
     role_id: number
     created_at: string
-    // Supabase can return arrays for joins depending on the query shape, so type as any
+    // Supabase can return arrays for joins depending on the query shape
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     roles: any
 }
 

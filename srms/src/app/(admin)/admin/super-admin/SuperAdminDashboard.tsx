@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Building2, Users, ShoppingBag, Crown, Ban, CheckCircle, Loader2, ChevronDown } from 'lucide-react'
+import { Building2, ShoppingBag, Crown, Ban, CheckCircle, Loader2, ChevronDown } from 'lucide-react'
 import { suspendRestaurant, updateSubscriptionTier } from './actions'
 import { toast } from 'react-hot-toast'
 
@@ -148,6 +148,7 @@ export default function SuperAdminDashboard({
                                     )}
                                 </div>
                                 <p className="text-sm text-gray-500 mt-1">
+                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                     {(restaurant.users as any)?.email || 'No owner'} • 
                                     Staff: {restaurant.max_staff} • 
                                     Items: {restaurant.max_menu_items}
@@ -159,7 +160,7 @@ export default function SuperAdminDashboard({
                                 <div className="relative">
                                     <select
                                         value={restaurant.subscription_tier || 'free'}
-                                        onChange={(e) => handleTierChange(restaurant.id, e.target.value as any)}
+                                        onChange={(e) => handleTierChange(restaurant.id, e.target.value as 'free' | 'basic' | 'pro' | 'enterprise')}
                                         disabled={loading === restaurant.id}
                                         className="appearance-none bg-white border border-gray-300 rounded-lg px-3 py-2 pr-8 text-sm font-medium disabled:opacity-50"
                                     >

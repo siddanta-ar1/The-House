@@ -114,7 +114,7 @@ export default function SettingsManager({
                     </div>
                     <div>
                         <h3 className="text-lg font-semibold text-gray-800">General Information</h3>
-                        <p className="text-sm text-gray-500">Your restaurant's brand and physical details</p>
+                        <p className="text-sm text-gray-500">Your restaurant&apos;s brand and physical details</p>
                     </div>
                 </div>
 

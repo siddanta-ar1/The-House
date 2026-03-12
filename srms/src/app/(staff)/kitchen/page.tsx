@@ -44,12 +44,14 @@ export default async function KitchenPage() {
     return (
         <div className="h-full space-y-6 p-4 overflow-y-auto">
             <OrderQueue
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 initialOrders={activeOrders as unknown as any[]}
                 restaurantId={restaurantId}
             />
             {/* TakeoutQueue — only shown if takeout is enabled */}
             {features?.takeoutEnabled && (
                 <TakeoutQueue
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     initialOrders={(takeoutOrders || []) as any[]}
                     restaurantId={restaurantId}
                 />

@@ -1,7 +1,7 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { Utensils, LogOut, Settings, Bell } from 'lucide-react'
+import { LogOut, Settings } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
@@ -13,7 +13,7 @@ export default function WaiterLayoutClient({ children }: { children: ReactNode }
 
     const handleSignOut = async () => {
         await supabase.auth.signOut()
-        router.push('/admin')
+        router.push('/login')
         router.refresh()
     }
 

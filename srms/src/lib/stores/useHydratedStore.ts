@@ -3,8 +3,11 @@
 // On SSR the store returns the initial (empty) state.
 // On the client, the persisted state is loaded only after mount.
 
-import { useState, useEffect } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { StoreApi, UseBoundStore } from 'zustand'
+
+// No-op subscribe — hydration state never changes after initial render
+const emptySubscribe = () => () => {}
 
 /**
  * A wrapper around a Zustand `persist` store that avoids hydration mismatches
@@ -21,13 +24,8 @@ export function useHydratedStore<S, T>(
     // Get the current value (may come from localStorage on the client)
     const storeValue = store(selector)
 
-    // On the server (and during the first client render), return the initial state
-    // to match what the server rendered.
-    const [hydrated, setHydrated] = useState(false)
-
-    useEffect(() => {
-        setHydrated(true)
-    }, [])
+    // useSyncExternalStore returns true on client, false on server — no setState needed
+    const hydrated = useSyncExternalStore(emptySubscribe, () => true, () => false)
 
     // During SSR and first client render, use the selector against the store's
     // *initial* state (before rehydration). Zustand v5's persist middleware

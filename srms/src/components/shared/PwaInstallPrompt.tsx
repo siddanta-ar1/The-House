@@ -3,8 +3,14 @@
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
 
+// BeforeInstallPromptEvent is not yet in the standard lib types
+interface BeforeInstallPromptEvent extends Event {
+    prompt: () => Promise<void>
+    userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
 export default function PwaInstallPrompt() {
-    const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+    const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
     const [showPrompt, setShowPrompt] = useState(false)
 
     useEffect(() => {
@@ -15,7 +21,7 @@ export default function PwaInstallPrompt() {
             // Prevent the mini-infobar from appearing on mobile
             e.preventDefault()
             // Stash the event so it can be triggered later.
-            setDeferredPrompt(e)
+            setDeferredPrompt(e as BeforeInstallPromptEvent)
             // Update UI notify the user they can install the PWA
             setShowPrompt(true)
         }

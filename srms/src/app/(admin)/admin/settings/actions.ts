@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function updateRestaurantSettingsAction(restaurantId: string, updates: any) {
+export async function updateRestaurantSettingsAction(restaurantId: string, updates: Record<string, unknown>) {
     const supabase = await createAdminClient()
 
     // Validate that we only update allowed fields

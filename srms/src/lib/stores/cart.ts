@@ -2,11 +2,21 @@
 // Zustand cart store with localStorage persistence and optimistic updates
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { CartItem, PromoCode, LoyaltyMember } from '@/types/database'
+import type { CartItem, CartItemModifier, PromoCode, LoyaltyMember } from '@/types/database'
 
 // Safety cap — prevents malicious users from adding absurd quantities
 // that could overflow NUMERIC(10,2) in the database
 const MAX_QUANTITY_PER_ITEM = 20
+
+// Generate a unique key for a cart item based on its ID + selected modifiers
+// This ensures "Latte + Oat Milk" and "Latte + Almond Milk" are separate line items
+function getCartItemKey(item: { menuItemId: string; modifiers?: CartItemModifier[] }): string {
+    const modKey = (item.modifiers || [])
+        .map((m) => m.modifierId)
+        .sort()
+        .join(',')
+    return `${item.menuItemId}::${modKey}`
+}
 
 interface CartState {
     items: CartItem[]
@@ -70,13 +80,16 @@ export const useCartStore = create<CartState>()(
 
             addItem: (item) =>
                 set((state) => {
+                    // Build a unique key from menuItemId + sorted modifier IDs
+                    // so "Latte + Oat Milk" and "Latte + Almond Milk" are separate items
+                    const itemKey = getCartItemKey(item)
                     const existing = state.items.find(
-                        (i) => i.menuItemId === item.menuItemId
+                        (i) => getCartItemKey(i) === itemKey
                     )
                     if (existing) {
                         return {
                             items: state.items.map((i) =>
-                                i.menuItemId === item.menuItemId
+                                getCartItemKey(i) === itemKey
                                     ? { ...i, quantity: Math.min(i.quantity + 1, MAX_QUANTITY_PER_ITEM) }
                                     : i
                             ),

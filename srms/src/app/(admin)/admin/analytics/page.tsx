@@ -57,7 +57,7 @@ export default async function AnalyticsPage() {
             <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Analytics & Reports</h1>
-                    <p className="text-gray-500 mt-1">Review your restaurant's performance metrics and KPIs.</p>
+                    <p className="text-gray-500 mt-1">Review your restaurant&apos;s performance metrics and KPIs.</p>
                 </div>
                 <div className="text-sm text-gray-400 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                     Last updated: {new Date().toLocaleTimeString()}

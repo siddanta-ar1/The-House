@@ -1,5 +1,4 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createServerClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { TrendingUp, Users, ShoppingBag, Clock } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'

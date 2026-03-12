@@ -40,12 +40,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Default values fallback
-        const features = settings.features as Record<string, any> || {}
+        const features = (settings.features || {}) as Record<string, number | boolean | string>
         const geofenceEnabled = features.geofenceEnabled || false
-        const radiusMeters = features.geofenceRadiusMeters || 100
+        const radiusMeters = Number(features.geofenceRadiusMeters) || 100
         // These would normally be stored in DB per restaurant, hardcoded mock for DB lack of column:
-        const restaurantLat = features.restaurantLat || 0
-        const restaurantLng = features.restaurantLng || 0
+        const restaurantLat = Number(features.restaurantLat) || 0
+        const restaurantLng = Number(features.restaurantLng) || 0
 
         if (!geofenceEnabled) {
             return NextResponse.json({ valid: true, message: 'Geofencing disabled' })
@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
             }, { status: 403 })
         }
 
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 })
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }

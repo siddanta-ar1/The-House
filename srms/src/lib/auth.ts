@@ -29,7 +29,7 @@ export async function getCurrentUser(): Promise<CurrentUser> {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) {
-        redirect('/admin')
+        redirect('/login')
     }
 
     // Try JWT claims first (fast path — no DB call)

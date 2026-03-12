@@ -59,7 +59,6 @@ export default async function CustomerMenuPage(props: {
                     restaurant_id: restaurantId,
                     session_token: newToken,
                     status: 'active',
-                    opened_by: 'customer_scan',
                     expires_at: fourHoursFromNow.toISOString(),
                 })
                 .select('id, session_token')
