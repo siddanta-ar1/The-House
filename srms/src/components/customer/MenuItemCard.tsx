@@ -1,6 +1,7 @@
 'use client'
 
 import { useCartStore } from '@/lib/stores/cart'
+import { useHydratedStore } from '@/lib/stores/useHydratedStore'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Minus } from 'lucide-react'
 import Image from 'next/image'
@@ -11,7 +12,11 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug }: {
     sessionId?: string,
     restaurantSlug: string
 }) {
-    const { items, addItem, removeItem, updateQuantity, setSession } = useCartStore()
+    const items = useHydratedStore(useCartStore, (s) => s.items)
+    const addItem = useCartStore((s) => s.addItem)
+    const removeItem = useCartStore((s) => s.removeItem)
+    const updateQuantity = useCartStore((s) => s.updateQuantity)
+    const setSession = useCartStore((s) => s.setSession)
 
     const cartItem = items.find((i) => i.menuItemId === item.id)
     const quantity = cartItem?.quantity || 0

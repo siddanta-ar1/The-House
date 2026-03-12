@@ -4,7 +4,16 @@
 
 export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled'
 export type SessionStatus = 'active' | 'closed' | 'expired'
+export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'refunded' | 'failed'
 export type RoleName = 'super_admin' | 'manager' | 'kitchen' | 'waiter' | 'customer'
+export type PricingRuleType = 'percentage_off' | 'fixed_price' | 'amount_off'
+export type PromoType = 'percentage_off' | 'amount_off' | 'free_item' | 'bogo'
+export type LoyaltyTier = 'bronze' | 'silver' | 'gold' | 'platinum'
+export type ServiceRequestType = 'call_waiter' | 'request_bill' | 'need_water' | 'clean_table' | 'other'
+export type ServiceRequestStatus = 'pending' | 'acknowledged' | 'completed' | 'cancelled'
+export type SplitType = 'by_seat' | 'even' | 'custom' | 'full'
+export type TakeoutStatus = 'placed' | 'confirmed' | 'preparing' | 'ready_for_pickup' | 'picked_up' | 'cancelled'
+export type IngredientMovementType = 'purchase' | 'usage' | 'waste' | 'adjustment' | 'transfer'
 
 export interface Role {
     id: number
@@ -71,6 +80,29 @@ export interface MenuItem {
     updated_at: string
     // Joined fields
     menu_categories?: MenuCategory
+    modifier_groups?: ModifierGroup[]
+}
+
+export interface ModifierGroup {
+    id: string
+    menu_item_id: string
+    name: string
+    min_selections: number
+    max_selections: number
+    sort_order: number
+    created_at: string
+    // Joined fields
+    modifiers?: Modifier[]
+}
+
+export interface Modifier {
+    id: string
+    group_id: string
+    name: string
+    price_adjustment: number
+    is_available: boolean
+    sort_order: number
+    created_at: string
 }
 
 export interface Session {
@@ -84,9 +116,20 @@ export interface Session {
     closed_at: string | null
     expires_at: string
     guest_count: number | null
+    max_seats: number
     notes: string | null
     // Joined fields
     tables?: Table
+    seats?: SessionSeat[]
+}
+
+export interface SessionSeat {
+    id: string
+    session_id: string
+    seat_number: number
+    label: string | null
+    device_fingerprint: string | null
+    created_at: string
 }
 
 export interface Order {
@@ -95,14 +138,27 @@ export interface Order {
     restaurant_id: string
     customer_note: string | null
     status: OrderStatus
+    subtotal_amount: number
+    tax_amount: number
+    tip_amount: number
+    discount_amount: number
     total_amount: number
+    payment_status: PaymentStatus
+    payment_method: 'cash' | 'card' | 'mobile' | 'split' | null
+    stripe_payment_intent_id: string | null
+    promo_code_id: string | null
+    loyalty_member_id: string | null
     placed_at: string
     confirmed_at: string | null
     ready_at: string | null
     delivered_at: string | null
+    paid_at: string | null
+    seat_id: string | null
     // Joined fields
     order_items?: OrderItem[]
     sessions?: Session
+    session_seats?: SessionSeat
+    order_promos?: OrderPromo[]
 }
 
 export interface OrderItem {
@@ -115,6 +171,16 @@ export interface OrderItem {
     created_at: string
     // Joined fields
     menu_items?: MenuItem
+    order_item_modifiers?: OrderItemModifier[]
+}
+
+export interface OrderItemModifier {
+    id: string
+    order_item_id: string
+    modifier_id: string
+    modifier_name: string
+    price_adjustment: number
+    created_at: string
 }
 
 export interface Settings {
@@ -133,11 +199,324 @@ export interface Settings {
         geofenceEnabled: boolean
         geofenceRadiusMeters: number
     }
+    features_v2: {
+        loyaltyEnabled: boolean
+        takeoutEnabled: boolean
+        multiLanguageEnabled: boolean
+        serviceRequestsEnabled: boolean
+        splitBillingEnabled: boolean
+        dynamicPricingEnabled: boolean
+        ingredientTrackingEnabled: boolean
+        staffShiftsEnabled: boolean
+        defaultTaxRate: number
+        currency: string
+        currencySymbol: string
+    }
     business_hours: Record<string, unknown> | null
     updated_at: string
 }
 
+// ============================================================
+// Dynamic Pricing & Happy Hours
+// ============================================================
+export interface PricingRule {
+    id: string
+    restaurant_id: string
+    name: string
+    description: string | null
+    rule_type: PricingRuleType
+    value: number
+    applies_to_item_id: string | null
+    applies_to_category_id: string | null
+    applies_to_all: boolean
+    days_of_week: number[]
+    start_time: string
+    end_time: string
+    valid_from: string | null
+    valid_until: string | null
+    is_active: boolean
+    priority: number
+    created_at: string
+    // Joined fields
+    menu_items?: MenuItem
+    menu_categories?: MenuCategory
+}
+
+// ============================================================
+// Promo Codes & Discounts
+// ============================================================
+export interface PromoCode {
+    id: string
+    restaurant_id: string
+    code: string
+    description: string | null
+    promo_type: PromoType
+    value: number
+    free_item_id: string | null
+    bogo_buy_item_id: string | null
+    bogo_get_item_id: string | null
+    min_order_amount: number
+    max_discount_amount: number | null
+    max_uses: number | null
+    max_uses_per_customer: number
+    current_uses: number
+    valid_from: string
+    valid_until: string | null
+    is_active: boolean
+    created_at: string
+}
+
+export interface OrderPromo {
+    id: string
+    order_id: string
+    promo_code_id: string
+    code_used: string
+    discount_amount: number
+    created_at: string
+}
+
+// ============================================================
+// CRM & Loyalty Program
+// ============================================================
+export interface LoyaltyMember {
+    id: string
+    restaurant_id: string
+    auth_user_id: string | null
+    phone: string | null
+    email: string | null
+    display_name: string | null
+    points_balance: number
+    lifetime_points: number
+    lifetime_spend: number
+    tier: LoyaltyTier
+    visit_count: number
+    last_visit_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+export interface LoyaltyConfig {
+    id: string
+    restaurant_id: string
+    points_per_dollar: number
+    redemption_threshold: number
+    redemption_value: number
+    silver_threshold: number
+    gold_threshold: number
+    platinum_threshold: number
+    birthday_bonus_points: number | null
+    signup_bonus_points: number | null
+    is_active: boolean
+    updated_at: string
+}
+
+export interface LoyaltyTransaction {
+    id: string
+    member_id: string
+    order_id: string | null
+    type: 'earn' | 'redeem' | 'bonus' | 'adjustment' | 'expire'
+    points: number
+    description: string | null
+    created_at: string
+}
+
+// ============================================================
+// Ingredient-Level Inventory & Recipe Management
+// ============================================================
+export interface Ingredient {
+    id: string
+    restaurant_id: string
+    name: string
+    unit: string
+    stock_quantity: number
+    reorder_level: number | null
+    cost_per_unit: number
+    supplier: string | null
+    is_active: boolean
+    updated_at: string
+    created_at: string
+}
+
+export interface Recipe {
+    id: string
+    menu_item_id: string
+    ingredient_id: string
+    quantity_needed: number
+    created_at: string
+    // Joined fields
+    ingredients?: Ingredient
+}
+
+export interface IngredientMovement {
+    id: string
+    ingredient_id: string
+    movement_type: IngredientMovementType
+    quantity: number
+    reference_id: string | null
+    notes: string | null
+    performed_by: string | null
+    created_at: string
+    // Joined fields
+    ingredients?: Ingredient
+    users?: User
+}
+
+// ============================================================
+// EOD Z-Reports
+// ============================================================
+export interface EodReport {
+    id: string
+    restaurant_id: string
+    report_date: string
+    total_orders: number
+    total_revenue: number
+    total_tax: number
+    total_tips: number
+    total_discounts: number
+    net_revenue: number
+    cash_total: number
+    card_total: number
+    total_voids: number
+    total_refunds: number
+    total_cancelled: number
+    avg_order_value: number
+    total_cogs: number
+    gross_profit: number
+    closed_by: string | null
+    notes: string | null
+    created_at: string
+}
+
+// ============================================================
+// Service Requests ("Call Waiter")
+// ============================================================
+export interface ServiceRequest {
+    id: string
+    session_id: string
+    restaurant_id: string
+    request_type: ServiceRequestType
+    message: string | null
+    status: ServiceRequestStatus
+    acknowledged_by: string | null
+    completed_at: string | null
+    created_at: string
+    // Joined fields
+    sessions?: Session
+    users?: User  // acknowledged_by
+}
+
+// ============================================================
+// Split Billing
+// ============================================================
+export interface BillSplit {
+    id: string
+    session_id: string
+    split_type: SplitType
+    total_amount: number
+    split_count: number
+    created_at: string
+    // Joined fields
+    bill_split_items?: BillSplitItem[]
+}
+
+export interface BillSplitItem {
+    id: string
+    bill_split_id: string
+    seat_id: string | null
+    label: string | null
+    amount: number
+    tax_amount: number
+    tip_amount: number
+    total_amount: number
+    payment_status: PaymentStatus
+    stripe_payment_intent_id: string | null
+    paid_at: string | null
+    created_at: string
+}
+
+// ============================================================
+// Multi-Language (i18n)
+// ============================================================
+export interface SupportedLanguage {
+    id: string
+    restaurant_id: string
+    language_code: string
+    language_name: string
+    is_default: boolean
+    is_active: boolean
+    sort_order: number
+    created_at: string
+}
+
+export interface Translation {
+    id: string
+    restaurant_id: string
+    language_code: string
+    entity_type: 'menu_item_name' | 'menu_item_description' | 'category_name' | 'modifier_group_name' | 'modifier_name' | 'restaurant_name'
+    entity_id: string
+    translated_text: string
+    created_at: string
+    updated_at: string
+}
+
+// ============================================================
+// Takeout / Order-Ahead
+// ============================================================
+export interface TakeoutOrder {
+    id: string
+    restaurant_id: string
+    loyalty_member_id: string | null
+    customer_name: string
+    customer_phone: string
+    customer_email: string | null
+    pickup_time: string
+    estimated_prep_minutes: number | null
+    status: TakeoutStatus
+    items: CartItem[]  // JSONB snapshot
+    subtotal_amount: number
+    tax_amount: number
+    total_amount: number
+    payment_status: PaymentStatus
+    stripe_payment_intent_id: string | null
+    promo_code_id: string | null
+    discount_amount: number
+    customer_note: string | null
+    kitchen_note: string | null
+    placed_at: string
+    confirmed_at: string | null
+    ready_at: string | null
+    picked_up_at: string | null
+    cancelled_at: string | null
+}
+
+// ============================================================
+// Staff Time & Attendance
+// ============================================================
+export interface StaffShift {
+    id: string
+    user_id: string
+    restaurant_id: string
+    clock_in: string
+    clock_out: string | null
+    hours_worked: number | null
+    break_start: string | null
+    break_end: string | null
+    break_minutes: number
+    notes: string | null
+    approved_by: string | null
+    is_approved: boolean
+    created_at: string
+    // Joined fields
+    users?: User
+}
+
 // Cart types (client-side only)
+export interface CartItemModifier {
+    modifierId: string
+    name: string
+    priceAdjustment: number
+}
+
 export interface CartItem {
     menuItemId: string
     name: string
@@ -145,4 +524,5 @@ export interface CartItem {
     quantity: number
     specialRequest?: string
     imageUrl?: string
+    modifiers?: CartItemModifier[]
 }

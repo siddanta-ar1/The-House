@@ -1,12 +1,14 @@
 'use client'
 
 import { useCartStore } from '@/lib/stores/cart'
+import { useHydratedStore } from '@/lib/stores/useHydratedStore'
 import { formatCurrency } from '@/lib/utils'
 import { ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
 
 export default function CartSummary({ sessionId }: { sessionId?: string }) {
-    const { totalItems, totalAmount } = useCartStore()
+    const totalItems = useHydratedStore(useCartStore, (s) => s.totalItems)
+    const totalAmount = useHydratedStore(useCartStore, (s) => s.totalAmount)
 
     const count = totalItems()
     const amount = totalAmount()

@@ -1,0 +1,126 @@
+'use server'
+
+import { createAdminClient } from '@/lib/supabase/server'
+import type { StaffShift } from '@/types/database'
+
+export async function clockIn(
+    userId: string,
+    restaurantId: string
+): Promise<{ shift?: StaffShift; error?: string }> {
+    const supabase = await createAdminClient()
+
+    // Check if already clocked in
+    const { data: active } = await supabase
+        .from('staff_shifts')
+        .select('id')
+        .eq('user_id', userId)
+        .is('clock_out', null)
+        .limit(1)
+        .single()
+
+    if (active) {
+        return { error: 'Already clocked in. Please clock out first.' }
+    }
+
+    // Call the RPC
+    const { data, error } = await supabase.rpc('staff_clock_in', {
+        p_user_id: userId,
+        p_restaurant_id: restaurantId,
+    })
+
+    if (error) {
+        console.error('Clock in error:', error)
+        return { error: 'Failed to clock in. Please try again.' }
+    }
+
+    // Fetch the created shift
+    const { data: shift } = await supabase
+        .from('staff_shifts')
+        .select('*')
+        .eq('id', data)
+        .single()
+
+    return { shift: shift as StaffShift }
+}
+
+export async function clockOut(
+    userId: string
+): Promise<{ shift?: StaffShift; error?: string }> {
+    const supabase = await createAdminClient()
+
+    // Call the RPC
+    const { data, error } = await supabase.rpc('staff_clock_out', {
+        p_user_id: userId,
+    })
+
+    if (error) {
+        console.error('Clock out error:', error)
+        if (error.message.includes('NO_ACTIVE_SHIFT')) {
+            return { error: 'No active shift found.' }
+        }
+        return { error: 'Failed to clock out. Please try again.' }
+    }
+
+    // Fetch the updated shift
+    const { data: shift } = await supabase
+        .from('staff_shifts')
+        .select('*')
+        .eq('id', data)
+        .single()
+
+    return { shift: shift as StaffShift }
+}
+
+export async function getActiveShift(
+    userId: string
+): Promise<StaffShift | null> {
+    const supabase = await createAdminClient()
+
+    const { data } = await supabase
+        .from('staff_shifts')
+        .select('*')
+        .eq('user_id', userId)
+        .is('clock_out', null)
+        .order('clock_in', { ascending: false })
+        .limit(1)
+        .single()
+
+    return data as StaffShift | null
+}
+
+export async function getShiftHistory(
+    userId: string,
+    limit = 20
+): Promise<StaffShift[]> {
+    const supabase = await createAdminClient()
+
+    const { data } = await supabase
+        .from('staff_shifts')
+        .select('*')
+        .eq('user_id', userId)
+        .order('clock_in', { ascending: false })
+        .limit(limit)
+
+    return (data || []) as StaffShift[]
+}
+
+export async function getAllActiveShifts(
+    restaurantId: string
+): Promise<(StaffShift & { user_name?: string })[]> {
+    const supabase = await createAdminClient()
+
+    const { data } = await supabase
+        .from('staff_shifts')
+        .select('*, users(display_name)')
+        .eq('restaurant_id', restaurantId)
+        .is('clock_out', null)
+        .order('clock_in', { ascending: true })
+
+    return (data || []).map((shift: unknown) => {
+        const s = shift as StaffShift & { users?: { display_name?: string } }
+        return {
+            ...s,
+            user_name: s.users?.display_name || 'Unknown',
+        }
+    })
+}

@@ -1,4 +1,5 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
+import { createServerClient } from '@/lib/supabase/server'
+import { getJwtClaims } from '@/lib/supabase/jwt'
 import OrderQueue from '@/components/kitchen/OrderQueue'
 import { redirect } from 'next/navigation'
 
@@ -11,19 +12,15 @@ export default async function KitchenPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/admin')
 
-    // Use admin client to bypass RLS for user/role lookup (safe — server-only)
-    const adminSupabase = await createAdminClient()
-    const { data: userData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id')
-        .eq('id', user.id)
-        .single()
-
-    if (!userData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = userData.restaurant_id
+    // Extract restaurant_id from JWT custom claims (injected by 004_jwt_claims_hook.sql)
+    // No admin DB roundtrip needed — the data is embedded in the access token
+    const claims = await getJwtClaims()
+    const restaurantId = claims?.restaurant_id
+    if (!restaurantId) redirect('/unauthorized')
 
     // Fetch initial active orders for this restaurant
+    // After initial hydration, the OrderQueue component relies purely on
+    // Supabase Realtime — no full DB refetch on page refresh needed
     const { data: activeOrders } = await supabase
         .from('orders')
         .select(`
@@ -37,7 +34,8 @@ export default async function KitchenPage() {
         id,
         quantity,
         special_request,
-        menu_items ( name )
+        menu_items ( name ),
+        order_item_modifiers ( modifier_name, price_adjustment )
       )
     `)
         .eq('restaurant_id', restaurantId)

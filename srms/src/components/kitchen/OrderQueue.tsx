@@ -1,20 +1,36 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { playKitchenPing } from '@/lib/audio'
 import { timeAgo } from '@/lib/utils'
 import { Clock, ChefHat, CheckSquare } from 'lucide-react'
-import type { OrderStatus, Order, OrderItem, MenuItem, Session, Table } from '@/types/database'
+import type { OrderStatus, Order, OrderItem, OrderItemModifier, MenuItem, Session, Table } from '@/types/database'
 
 type KitchenOrder = Order & {
     sessions?: Session & { tables?: Partial<Table> }
-    order_items?: (OrderItem & { menu_items?: Partial<MenuItem> })[]
+    order_items?: (OrderItem & {
+        menu_items?: Partial<MenuItem>
+        order_item_modifiers?: Partial<OrderItemModifier>[]
+    })[]
 }
+
+// The query shape used to fetch full order details (DRY)
+const ORDER_SELECT = `
+  id, status, total_amount, placed_at, customer_note,
+  sessions ( tables ( label ) ),
+  order_items (
+    id, quantity, special_request,
+    menu_items ( name ),
+    order_item_modifiers ( modifier_name, price_adjustment )
+  )
+` as const
 
 export default function OrderQueue({ initialOrders, restaurantId }: { initialOrders: KitchenOrder[], restaurantId: string }) {
     const [orders, setOrders] = useState<KitchenOrder[]>(initialOrders)
     const supabase = createClient()
+    // Track if we've hydrated from server to avoid duplicate fetches
+    const isHydrated = useRef(true)
 
     useEffect(() => {
         const channel = supabase
@@ -26,11 +42,7 @@ export default function OrderQueue({ initialOrders, restaurantId }: { initialOrd
                     // Fetch the full order details including relations
                     const { data } = await supabase
                         .from('orders')
-                        .select(`
-              id, status, total_amount, placed_at, customer_note,
-              sessions ( tables ( label ) ),
-              order_items ( id, quantity, special_request, menu_items ( name ) )
-            `)
+                        .select(ORDER_SELECT)
                         .eq('id', payload.new.id)
                         .single()
 
@@ -185,6 +197,17 @@ function OrderTicket({ order, onAction, actionLabel, statusColor, accentColor }:
                             <span className="font-bold w-6 text-gray-400 shrink-0">{item.quantity}x</span>
                             <div>
                                 <span className="font-medium text-[15px]">{item.menu_items?.name}</span>
+                                {/* Render selected modifiers */}
+                                {item.order_item_modifiers && item.order_item_modifiers.length > 0 && (
+                                    <div className="text-xs text-blue-400/80 mt-0.5">
+                                        {item.order_item_modifiers.map((mod, i) => (
+                                            <span key={i}>
+                                                {mod.modifier_name}{mod.price_adjustment ? ` (+${mod.price_adjustment?.toFixed(2)})` : ''}
+                                                {i < (item.order_item_modifiers?.length ?? 0) - 1 ? ', ' : ''}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
                                 {item.special_request && (
                                     <div className="text-sm text-yellow-500/90 mt-0.5 font-medium italic">
                                         Note: {item.special_request}

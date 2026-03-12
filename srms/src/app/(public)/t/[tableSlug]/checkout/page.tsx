@@ -1,21 +1,41 @@
 'use client'
 
 import { useCartStore } from '@/lib/stores/cart'
+import { useHydratedStore } from '@/lib/stores/useHydratedStore'
 import { formatCurrency } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { placeOrder } from './actions'
 import { useState } from 'react'
 import { ArrowLeft, Trash2, Plus, Minus, Loader2 } from 'lucide-react'
+import PromoCodeInput from '@/components/customer/PromoCodeInput'
+import LoyaltyPanel from '@/components/customer/LoyaltyPanel'
 
 export default async function CheckoutPage(props: {
     params: Promise<{ tableSlug: string }>
 }) {
     const params = await props.params;
     const tableSlug = params.tableSlug;
-    const { items, sessionId, removeItem, updateQuantity, totalAmount, totalItems, clearCart, restaurantSlug } = useCartStore()
+    const items = useHydratedStore(useCartStore, (s) => s.items)
+    const sessionId = useHydratedStore(useCartStore, (s) => s.sessionId)
+    const restaurantSlug = useHydratedStore(useCartStore, (s) => s.restaurantSlug)
+    const restaurantId = useHydratedStore(useCartStore, (s) => s.restaurantId)
+    const promoCode = useHydratedStore(useCartStore, (s) => s.promoCode)
+    const promoDiscount = useHydratedStore(useCartStore, (s) => s.promoDiscount)
+    const loyaltyMember = useHydratedStore(useCartStore, (s) => s.loyaltyMember)
+    const loyaltyDiscount = useHydratedStore(useCartStore, (s) => s.loyaltyDiscount)
+    const removeItem = useCartStore((s) => s.removeItem)
+    const updateQuantity = useCartStore((s) => s.updateQuantity)
+    const totalAmount = useCartStore((s) => s.totalAmount)
+    const totalItems = useCartStore((s) => s.totalItems)
+    const finalTotal = useCartStore((s) => s.finalTotal)
+    const clearCart = useCartStore((s) => s.clearCart)
+    const setPromo = useCartStore((s) => s.setPromo)
+    const setLoyaltyMember = useCartStore((s) => s.setLoyaltyMember)
+    const setLoyaltyDiscount = useCartStore((s) => s.setLoyaltyDiscount)
     const [note, setNote] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
+    const [orderResult, setOrderResult] = useState<{ pointsEarned?: number } | null>(null)
     const router = useRouter()
 
     if (items.length === 0) {
@@ -46,12 +66,22 @@ export default async function CheckoutPage(props: {
         setIsSubmitting(true)
         setErrorMsg('')
 
-        const res = await placeOrder(sessionId, restaurantSlug || params.tableSlug, items, note)
+        const res = await placeOrder(
+            sessionId,
+            restaurantSlug || params.tableSlug,
+            items,
+            note,
+            promoCode?.code || null,
+            loyaltyMember?.id || null
+        )
 
         if (res.error) {
             setErrorMsg(res.error)
             setIsSubmitting(false)
         } else if (res.orderId) {
+            if (res.pointsEarned) {
+                setOrderResult({ pointsEarned: res.pointsEarned })
+            }
             clearCart()
             router.push(`/t/${params.tableSlug}/order/${res.orderId}`)
         }
@@ -123,14 +153,57 @@ export default async function CheckoutPage(props: {
                         placeholder="E.g. No onions, extra spicy..."
                     />
                 </div>
+
+                {/* Promo Code */}
+                {restaurantId && (
+                    <div className="bg-white rounded-[var(--border-radius)] shadow-sm border border-gray-100 p-4 mb-6">
+                        <PromoCodeInput
+                            restaurantId={restaurantId}
+                            subtotal={totalAmount()}
+                            onApply={(promo, discount) => setPromo(promo, discount)}
+                            onRemove={() => setPromo(null, 0)}
+                            appliedPromo={promoCode}
+                        />
+                    </div>
+                )}
+
+                {/* Loyalty */}
+                {restaurantId && (
+                    <div className="bg-white rounded-[var(--border-radius)] shadow-sm border border-gray-100 p-4 mb-6">
+                        <LoyaltyPanel
+                            restaurantId={restaurantId}
+                            onMemberSet={setLoyaltyMember}
+                            onRedeemDiscount={setLoyaltyDiscount}
+                            activeMember={loyaltyMember}
+                        />
+                    </div>
+                )}
             </main>
 
             {/* Persistent Bottom Checkout Bar */}
             <div className="fixed bottom-0 left-0 right-0 p-4 z-50 bg-white border-t border-gray-200">
                 <div className="max-w-xl mx-auto">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className="text-gray-600 font-medium">Total to pay</span>
-                        <span className="text-2xl font-bold text-gray-900">{formatCurrency(totalAmount())}</span>
+                    <div className="space-y-1 mb-4">
+                        <div className="flex justify-between text-sm text-gray-500">
+                            <span>Subtotal</span>
+                            <span>{formatCurrency(totalAmount())}</span>
+                        </div>
+                        {promoDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-green-600">
+                                <span>Promo ({promoCode?.code})</span>
+                                <span>-{formatCurrency(promoDiscount)}</span>
+                            </div>
+                        )}
+                        {loyaltyDiscount > 0 && (
+                            <div className="flex justify-between text-sm text-indigo-600">
+                                <span>Loyalty Reward</span>
+                                <span>-{formatCurrency(loyaltyDiscount)}</span>
+                            </div>
+                        )}
+                        <div className="flex justify-between items-center pt-1 border-t border-gray-100">
+                            <span className="text-gray-600 font-medium">Total to pay</span>
+                            <span className="text-2xl font-bold text-gray-900">{formatCurrency(finalTotal())}</span>
+                        </div>
                     </div>
 
                     <button
