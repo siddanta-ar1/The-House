@@ -3,6 +3,7 @@
 import { ReactNode } from 'react'
 import { ChefHat, LogOut, Settings } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -21,13 +22,15 @@ export default function KitchenLayoutClient({ children }: { children: ReactNode 
             {/* Top Navbar — responsive */}
             <header className="bg-[var(--color-secondary)] brightness-90 border-b border-white/10 px-3 md:px-6 py-2.5 md:py-3 shrink-0 flex items-center justify-between shadow-md">
                 <div className="flex items-center gap-2 md:gap-3">
-                    <div className="bg-[var(--color-primary)] p-1.5 md:p-2 rounded-lg text-white">
-                        <ChefHat size={20} />
-                    </div>
-                    <h1 className="text-base md:text-xl font-bold tracking-tight text-white">
-                        <span className="hidden sm:inline">Kitchen Display System</span>
-                        <span className="sm:hidden">KDS</span>
-                    </h1>
+                    <Image
+                        src="/icons/kkhane.png"
+                        alt="KKhane"
+                        width={100}
+                        height={28}
+                        className="h-7 w-auto object-contain brightness-0 invert"
+                        priority
+                    />
+                    <span className="text-xs text-gray-400 font-medium">KDS</span>
                 </div>
 
                 <div className="flex items-center gap-2 md:gap-4">

@@ -2,26 +2,14 @@ import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { formatCurrency } from '@/lib/utils'
 import { TrendingUp, Users, ShoppingBag, Clock } from 'lucide-react'
+import { getCurrentUser } from '@/lib/auth'
 
 export const revalidate = 0
 
 export default async function AdminDashboardPage() {
+    const { restaurantId } = await getCurrentUser()
+
     const supabase = await createServerClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/admin')
-
-    // Use admin client to bypass RLS for user/role lookup (safe — server-only)
-    const adminSupabase = await createAdminClient()
-    const { data: userData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id')
-        .eq('id', user.id)
-        .single()
-
-    if (!userData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = userData.restaurant_id
 
     // Fetch simple aggregate data for the dashboard
     const today = new Date()
@@ -30,7 +18,8 @@ export default async function AdminDashboardPage() {
     const [
         { count: totalOrdersToday },
         { data: activeSessions },
-        { data: recentOrders }
+        { data: recentOrders },
+        { data: todayDeliveredOrders },
     ] = await Promise.all([
         supabase
             .from('orders')
@@ -47,11 +36,20 @@ export default async function AdminDashboardPage() {
             .select('id, total_amount, status, placed_at')
             .eq('restaurant_id', restaurantId)
             .order('placed_at', { ascending: false })
-            .limit(5)
+            .limit(5),
+        // Actual revenue: sum ALL delivered/ready orders placed today
+        supabase
+            .from('orders')
+            .select('total_amount')
+            .eq('restaurant_id', restaurantId)
+            .gte('placed_at', today.toISOString())
+            .in('status', ['delivered', 'ready', 'preparing', 'confirmed', 'pending']),
     ])
 
-    // Mock total revenue for today
-    const totalRevenueToday = recentOrders?.reduce((acc, order) => acc + (order.total_amount || 0), 0) || 0
+    // Actual revenue from all of today's non-cancelled orders
+    const totalRevenueToday = todayDeliveredOrders?.reduce(
+        (acc, order) => acc + (order.total_amount || 0), 0
+    ) || 0
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -98,7 +96,7 @@ export default async function AdminDashboardPage() {
                     </div>
                     <div>
                         <p className="text-[10px] md:text-sm font-medium text-gray-500 uppercase tracking-wide">Avg Prep Time</p>
-                        <p className="text-lg md:text-2xl font-bold text-gray-900">14m</p>
+                        <p className="text-lg md:text-2xl font-bold text-gray-900">—</p>
                     </div>
                 </div>
             </div>

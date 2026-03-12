@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { Save, Store, Mail, Phone, MapPin, Building, Percent, Check, Loader2 } from 'lucide-react'
+import { Save, Store, Mail, Phone, MapPin, Building, Percent, Check, Loader2, QrCode, Shield, ToggleLeft, ToggleRight } from 'lucide-react'
 import { updateRestaurantSettingsAction } from '@/app/(admin)/admin/settings/actions'
+import { updateFeaturesAction } from '@/lib/features'
 import { toast } from 'react-hot-toast'
+import type { Settings } from '@/types/database'
 
 type RestaurantSettings = {
     id: string
@@ -14,24 +16,56 @@ type RestaurantSettings = {
     address: string | null
     tax_rate: number
     currency: string
+    currency_symbol: string | null
+    pan_number: string | null
+    vat_registered: boolean
+    payment_qr_url: string | null
+    payment_qr_provider: string | null
 }
+
+type Features = Settings['features_v2']
 
 export default function SettingsManager({
     initialRestaurant,
+    initialFeatures,
     canEdit
 }: {
     initialRestaurant: RestaurantSettings
+    initialFeatures: Features | null
     canEdit: boolean
 }) {
     const [formData, setFormData] = useState<RestaurantSettings>(initialRestaurant)
+    const [features, setFeatures] = useState<Features>(initialFeatures || {
+        loyaltyEnabled: false,
+        promosEnabled: true,
+        takeoutEnabled: false,
+        multiLanguageEnabled: false,
+        serviceRequestsEnabled: true,
+        splitBillingEnabled: true,
+        dynamicPricingEnabled: false,
+        ingredientTrackingEnabled: false,
+        staffShiftsEnabled: false,
+        defaultTaxRate: 13.0,
+        currency: 'NPR',
+        currencySymbol: 'Rs.',
+        nepalPayEnabled: false,
+        vatEnabled: false,
+        phoneOtpEnabled: false,
+        bsDateEnabled: false,
+    })
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isSavingFeatures, setIsSavingFeatures] = useState(false)
     const [isSuccess, setIsSuccess] = useState(false)
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target
-        // Handle number inputs specifically
         const finalValue = type === 'number' ? parseFloat(value) : value
         setFormData({ ...formData, [name]: finalValue })
+    }
+
+    const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, checked } = e.target
+        setFormData({ ...formData, [name]: checked })
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -54,7 +88,23 @@ export default function SettingsManager({
         setIsSubmitting(false)
     }
 
+    const toggleFeature = async (key: keyof Features) => {
+        if (!canEdit) return
+        const newValue = !features[key]
+        const updated = { ...features, [key]: newValue }
+        setFeatures(updated)
+
+        setIsSavingFeatures(true)
+        const res = await updateFeaturesAction(formData.id, { [key]: newValue })
+        if (res.error) {
+            toast.error('Failed to save feature toggle')
+            setFeatures(features) // revert
+        }
+        setIsSavingFeatures(false)
+    }
+
     return (
+        <>
         <form onSubmit={handleSubmit} className="space-y-6 max-w-4xl">
             {/* General Information */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
@@ -199,9 +249,130 @@ export default function SettingsManager({
                                 placeholder="USD"
                                 required
                             />
-                            <p className="mt-1.5 text-xs text-gray-500">Standard 3-letter currency code (e.g., USD, EUR, GBP).</p>
+                            <p className="mt-1.5 text-xs text-gray-500">Standard 3-letter currency code (e.g., NPR, USD, EUR).</p>
                         </div>
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-2">
+                                Currency Symbol
+                            </label>
+                            <input
+                                type="text"
+                                name="currency_symbol"
+                                value={formData.currency_symbol || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                maxLength={5}
+                                className="w-full border-gray-300 rounded-lg shadow-sm sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                                placeholder="Rs."
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Nepal / IRD Compliance */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+                    <div className="p-2 bg-purple-100 text-purple-600 rounded-lg">
+                        <Shield size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800">Tax & Compliance (Nepal)</h3>
+                        <p className="text-sm text-gray-500">PAN/VAT registration and IRD invoice settings</p>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1">PAN Number</label>
+                            <input
+                                type="text"
+                                name="pan_number"
+                                value={formData.pan_number || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                maxLength={9}
+                                className="w-full border-gray-300 rounded-lg shadow-sm sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                                placeholder="123456789"
+                            />
+                            <p className="mt-1.5 text-xs text-gray-500">9-digit IRD PAN number for invoicing</p>
+                        </div>
+                        <div className="flex items-center gap-4 pt-6">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    name="vat_registered"
+                                    checked={formData.vat_registered || false}
+                                    onChange={handleCheckboxChange}
+                                    disabled={!canEdit || isSubmitting}
+                                    className="h-5 w-5 rounded border-gray-300 text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                                />
+                                <div>
+                                    <span className="text-sm font-medium text-gray-700">VAT Registered</span>
+                                    <p className="text-xs text-gray-500">Enable 13% VAT on invoices</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* QR Payment Setup */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+                    <div className="p-2 bg-green-100 text-green-600 rounded-lg">
+                        <QrCode size={20} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800">QR Payment</h3>
+                        <p className="text-sm text-gray-500">Upload your eSewa/Khalti/Fonepay QR for customers</p>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1">QR Code Image URL</label>
+                            <input
+                                type="url"
+                                name="payment_qr_url"
+                                value={formData.payment_qr_url || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                className="w-full border-gray-300 rounded-lg shadow-sm sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                                placeholder="https://..."
+                            />
+                            <p className="mt-1.5 text-xs text-gray-500">Direct link to your payment QR image</p>
+                        </div>
+                        <div>
+                            <label className="text-sm font-medium text-gray-700 mb-1">QR Provider</label>
+                            <select
+                                name="payment_qr_provider"
+                                value={formData.payment_qr_provider || ''}
+                                onChange={handleChange}
+                                disabled={!canEdit || isSubmitting}
+                                className="w-full border-gray-300 rounded-lg shadow-sm sm:text-sm p-2.5 border disabled:bg-gray-50 disabled:text-gray-500"
+                            >
+                                <option value="">Select provider...</option>
+                                <option value="esewa">eSewa</option>
+                                <option value="khalti">Khalti</option>
+                                <option value="fonepay">Fonepay</option>
+                                <option value="nepal_pay">Nepal Pay</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {formData.payment_qr_url && (
+                        <div className="p-4 rounded-xl border border-gray-100 bg-gray-50/50 inline-block">
+                            <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wide">QR Preview</p>
+                            <img src={formData.payment_qr_url} alt="Payment QR" className="h-32 object-contain bg-white rounded-lg p-2 border border-gray-200" />
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -229,5 +400,60 @@ export default function SettingsManager({
                 </button>
             </div>
         </form>
+
+        {/* Feature Toggles — separate from the form since they save instantly */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mt-6 max-w-4xl">
+            <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 text-indigo-600 rounded-lg">
+                    {isSavingFeatures ? <Loader2 size={20} className="animate-spin" /> : <ToggleRight size={20} />}
+                </div>
+                <div>
+                    <h3 className="text-lg font-semibold text-gray-800">Feature Flags</h3>
+                    <p className="text-sm text-gray-500">Enable or disable features for your restaurant — changes apply instantly</p>
+                </div>
+            </div>
+
+            <div className="p-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {([
+                        { key: 'serviceRequestsEnabled' as const, label: 'Service Requests', desc: 'Customers can call waiter, request bill, etc.' },
+                        { key: 'splitBillingEnabled' as const, label: 'Split Billing', desc: 'Allow customers to split bills at checkout' },
+                        { key: 'promosEnabled' as const, label: 'Promo Codes', desc: 'Allow promo/discount codes at checkout' },
+                        { key: 'loyaltyEnabled' as const, label: 'Loyalty Program', desc: 'Points-based loyalty rewards for repeat customers' },
+                        { key: 'takeoutEnabled' as const, label: 'Takeout Orders', desc: 'Accept orders for pickup' },
+                        { key: 'dynamicPricingEnabled' as const, label: 'Dynamic Pricing', desc: 'Time-based price adjustments' },
+                        { key: 'ingredientTrackingEnabled' as const, label: 'Ingredient Tracking', desc: 'Track stock levels for menu items' },
+                        { key: 'staffShiftsEnabled' as const, label: 'Staff Shifts', desc: 'Clock in/out for staff members' },
+                        { key: 'nepalPayEnabled' as const, label: 'Nepal QR Pay', desc: 'eSewa/Khalti/Fonepay QR payment' },
+                        { key: 'vatEnabled' as const, label: 'VAT on Invoices', desc: 'Show 13% VAT on printed invoices' },
+                        { key: 'phoneOtpEnabled' as const, label: 'Phone OTP Login', desc: 'Allow phone number login via SMS OTP' },
+                        { key: 'multiLanguageEnabled' as const, label: 'Multi-Language', desc: 'Menu in multiple languages' },
+                        { key: 'bsDateEnabled' as const, label: 'Bikram Sambat Date', desc: 'Show BS calendar dates' },
+                    ]).map(({ key, label, desc }) => (
+                        <button
+                            key={key}
+                            onClick={() => toggleFeature(key)}
+                            disabled={!canEdit || isSavingFeatures}
+                            className={`flex items-center justify-between p-4 rounded-xl border transition-all text-left ${
+                                features[key]
+                                    ? 'bg-indigo-50 border-indigo-200'
+                                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                            <div>
+                                <span className="text-sm font-semibold text-gray-800">{label}</span>
+                                <p className="text-xs text-gray-500 mt-0.5">{desc}</p>
+                            </div>
+                            {features[key] ? (
+                                <ToggleRight size={28} className="text-indigo-600 shrink-0" />
+                            ) : (
+                                <ToggleLeft size={28} className="text-gray-400 shrink-0" />
+                            )}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+        </>
     )
 }

@@ -1,28 +1,21 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/server'
 import StaffManager from '@/components/admin/StaffManager'
 
 export const dynamic = 'force-dynamic'
 
 export default async function StaffManagementPage() {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) redirect('/admin')
-
+    const { id: userId, restaurantId } = await getCurrentUser()
     const adminSupabase = await createAdminClient()
 
-    // 1. Get current user's restaurant_id and role
+    // Get current user's role
     const { data: currentUserData } = await adminSupabase
         .from('users')
-        .select('restaurant_id, role_id, roles(name)')
-        .eq('id', user.id)
+        .select('role_id, roles(name)')
+        .eq('id', userId)
         .single()
 
-    if (!currentUserData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = currentUserData.restaurant_id
-    const currentUserRole = (currentUserData.roles as unknown as { name: string } | null)?.name || ''
+    const currentUserRole = (currentUserData?.roles as unknown as { name: string } | null)?.name || ''
 
     // 2. Fetch all roles available
     const { data: roles } = await adminSupabase
@@ -65,7 +58,7 @@ export default async function StaffManagementPage() {
                 initialStaff={staffMembers || []}
                 roles={roles || []}
                 currentUserRole={currentUserRole}
-                currentUserId={user.id}
+                currentUserId={userId}
             />
         </div>
     )

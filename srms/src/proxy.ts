@@ -13,8 +13,18 @@ const ROLE_ACCESS: Record<string, string[]> = {
     '/admin/menu': ['manager', 'super_admin'],
     '/admin/staff': ['manager', 'super_admin'],
     '/admin/tables': ['manager', 'super_admin'],
-    '/admin/settings': ['super_admin'],
+    '/admin/settings': ['manager', 'super_admin'],
     '/admin/analytics': ['manager', 'super_admin'],
+    '/admin/pricing': ['manager', 'super_admin'],
+    '/admin/promos': ['manager', 'super_admin'],
+    '/admin/loyalty': ['manager', 'super_admin'],
+    '/admin/reports': ['manager', 'super_admin'],
+    '/admin/ingredients': ['manager', 'super_admin'],
+    '/admin/shifts': ['manager', 'super_admin'],
+    '/admin/takeout': ['manager', 'super_admin'],
+    '/admin/orders': ['waiter', 'manager', 'super_admin'],
+    '/admin/theme': ['manager', 'super_admin'],
+    '/admin/super-admin': ['super_admin'],
 }
 
 export async function proxy(request: NextRequest) {
@@ -34,8 +44,13 @@ export async function proxy(request: NextRequest) {
     // ----------------------------------------------------------
     // 2. Staff & Admin routes: require authentication + role check
     // ----------------------------------------------------------
-    const protectedPrefixes = ['/kitchen', '/waiter', '/admin/dashboard', '/admin/menu',
-        '/admin/staff', '/admin/tables', '/admin/settings', '/admin/analytics']
+    const protectedPrefixes = [
+        '/kitchen', '/waiter',
+        '/admin/dashboard', '/admin/menu', '/admin/staff', '/admin/tables',
+        '/admin/settings', '/admin/analytics', '/admin/pricing', '/admin/promos',
+        '/admin/loyalty', '/admin/reports', '/admin/ingredients', '/admin/shifts',
+        '/admin/takeout', '/admin/orders', '/admin/theme', '/admin/super-admin',
+    ]
 
     const isProtected = protectedPrefixes.some((prefix) => pathname.startsWith(prefix))
 

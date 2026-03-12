@@ -9,12 +9,15 @@ import { useState } from 'react'
 import { ArrowLeft, Trash2, Plus, Minus, Loader2 } from 'lucide-react'
 import PromoCodeInput from '@/components/customer/PromoCodeInput'
 import LoyaltyPanel from '@/components/customer/LoyaltyPanel'
+import SplitBillModal from '@/components/customer/SplitBillModal'
+import NepalPaymentPanel from '@/components/customer/NepalPaymentPanel'
+import { useFeatures } from '@/lib/contexts/FeatureContext'
+import { useParams } from 'next/navigation'
 
-export default async function CheckoutPage(props: {
-    params: Promise<{ tableSlug: string }>
-}) {
-    const params = await props.params;
-    const tableSlug = params.tableSlug;
+export default function CheckoutPage() {
+    const params = useParams<{ tableSlug: string }>()
+    const tableSlug = params.tableSlug
+    const features = useFeatures()
     const items = useHydratedStore(useCartStore, (s) => s.items)
     const sessionId = useHydratedStore(useCartStore, (s) => s.sessionId)
     const restaurantSlug = useHydratedStore(useCartStore, (s) => s.restaurantSlug)
@@ -35,6 +38,7 @@ export default async function CheckoutPage(props: {
     const [note, setNote] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
+    const [showSplit, setShowSplit] = useState(false)
     const [orderResult, setOrderResult] = useState<{ pointsEarned?: number } | null>(null)
     const router = useRouter()
 
@@ -154,8 +158,8 @@ export default async function CheckoutPage(props: {
                     />
                 </div>
 
-                {/* Promo Code */}
-                {restaurantId && (
+                {/* Promo Code — shown when promos OR loyalty is enabled */}
+                {restaurantId && (features.promosEnabled !== false) && (
                     <div className="bg-white rounded-[var(--border-radius)] shadow-sm border border-gray-100 p-4 mb-6">
                         <PromoCodeInput
                             restaurantId={restaurantId}
@@ -167,14 +171,24 @@ export default async function CheckoutPage(props: {
                     </div>
                 )}
 
-                {/* Loyalty */}
-                {restaurantId && (
+                {/* Loyalty — gated by feature flag */}
+                {restaurantId && features.loyaltyEnabled && (
                     <div className="bg-white rounded-[var(--border-radius)] shadow-sm border border-gray-100 p-4 mb-6">
                         <LoyaltyPanel
                             restaurantId={restaurantId}
                             onMemberSet={setLoyaltyMember}
                             onRedeemDiscount={setLoyaltyDiscount}
                             activeMember={loyaltyMember}
+                        />
+                    </div>
+                )}
+
+                {/* Nepal QR Payment — gated by nepalPayEnabled flag */}
+                {restaurantId && features.nepalPayEnabled && (
+                    <div className="bg-white rounded-[var(--border-radius)] shadow-sm border border-gray-100 p-4 mb-6">
+                        <NepalPaymentPanel
+                            restaurantId={restaurantId}
+                            totalAmount={finalTotal()}
                         />
                     </div>
                 )}
@@ -206,6 +220,18 @@ export default async function CheckoutPage(props: {
                         </div>
                     </div>
 
+                    <div className="flex gap-2 mb-3">
+                        {features.splitBillingEnabled && (
+                            <button
+                                onClick={() => setShowSplit(true)}
+                                disabled={!sessionId}
+                                className="flex-1 border border-gray-300 text-gray-700 font-medium rounded-xl py-3 text-sm hover:bg-gray-50 disabled:opacity-50"
+                            >
+                                Split Bill
+                            </button>
+                        )}
+                    </div>
+
                     <button
                         onClick={handleCheckout}
                         disabled={isSubmitting}
@@ -219,6 +245,13 @@ export default async function CheckoutPage(props: {
                     </button>
                 </div>
             </div>
+            {showSplit && sessionId && (
+                <SplitBillModal
+                    sessionId={sessionId}
+                    totalAmount={finalTotal()}
+                    onClose={() => setShowSplit(false)}
+                />
+            )}
         </div>
     )
 }

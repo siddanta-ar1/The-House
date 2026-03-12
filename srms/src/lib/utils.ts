@@ -12,13 +12,24 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Format currency amount for display
+ * Format currency amount for display.
+ * Supports NPR with Rs. prefix, falls back to Intl for other currencies.
  */
-export function formatCurrency(amount: number, currency = 'USD'): string {
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency,
-    }).format(amount)
+export function formatCurrency(amount: number, currency = 'NPR'): string {
+    if (currency === 'NPR') {
+        return `Rs. ${new Intl.NumberFormat('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }).format(amount)}`
+    }
+    try {
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency,
+        }).format(amount)
+    } catch {
+        return `${currency} ${amount.toFixed(2)}`
+    }
 }
 
 /**

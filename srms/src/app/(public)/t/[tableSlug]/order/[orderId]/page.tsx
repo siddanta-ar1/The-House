@@ -1,6 +1,7 @@
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import OrderTracker from '@/components/customer/OrderTracker'
+import InvoiceBanner from '@/components/customer/InvoiceBanner'
 
 export const revalidate = 0 // Don't cache this page - fetch fresh DB state
 
@@ -27,6 +28,18 @@ export default async function OrderPage(props: {
         return notFound()
     }
 
+    // Fetch restaurant info for invoice display (PAN number, VAT status)
+    let restaurantInfo: { pan_number?: string; vat_registered?: boolean; name?: string } | null = null
+    if (order.restaurant_id) {
+        const adminSupabase = await createAdminClient()
+        const { data } = await adminSupabase
+            .from('restaurants')
+            .select('pan_number, vat_registered, name')
+            .eq('id', order.restaurant_id)
+            .single()
+        restaurantInfo = data
+    }
+
     return (
         <div className="min-h-screen bg-gray-50 pb-12">
             {/* Header */}
@@ -36,6 +49,16 @@ export default async function OrderPage(props: {
 
             <main className="max-w-xl mx-auto px-4 mt-6">
                 <OrderTracker orderId={params.orderId} initialOrder={order} />
+
+                {/* Invoice / PAN display */}
+                {(order as any).invoice_number && (
+                    <InvoiceBanner
+                        invoiceNumber={(order as any).invoice_number}
+                        panNumber={restaurantInfo?.pan_number || (order as any).pan_number_snapshot}
+                        restaurantName={restaurantInfo?.name}
+                        vatRegistered={restaurantInfo?.vat_registered}
+                    />
+                )}
 
                 {/* Support/Extra Actions */}
                 <div className="mt-8 text-center text-sm text-gray-500">

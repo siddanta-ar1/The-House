@@ -1,26 +1,17 @@
+import { getCurrentUser } from '@/lib/auth'
 import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import TableManager, { type TableWithSession } from '@/components/waiter/TableManager'
-import { redirect } from 'next/navigation'
+import ServiceRequestFeed from '@/components/waiter/ServiceRequestFeed'
+import StaffShiftClock from '@/components/shared/StaffShiftClock'
+import PaymentVerificationFeed from '@/components/waiter/PaymentVerificationFeed'
+import { getRestaurantFeatures } from '@/lib/features'
 
 export const revalidate = 0
 
 export default async function WaiterPage() {
+    const { id: userId, restaurantId } = await getCurrentUser()
     const supabase = await createServerClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/admin')
-
-    // Use admin client to bypass RLS for user/role lookup (safe — server-only)
     const adminSupabase = await createAdminClient()
-    const { data: userData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id')
-        .eq('id', user.id)
-        .single()
-
-    if (!userData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = userData.restaurant_id
 
     // Fetch all tables AND their active sessions (if any)
     const { data: tables } = await supabase
@@ -37,7 +28,6 @@ export default async function WaiterPage() {
 
     // Map the nested array into a cleaner union for the client
     const mappedTables = tables?.map(table => {
-        // Supabase returns an array of matched joined records. We only care about 'active' ones.
         const sessions = table.sessions as unknown as { status: string }[]
         const activeSession = sessions?.find((s) => s.status === 'active')
         return {
@@ -46,14 +36,76 @@ export default async function WaiterPage() {
         }
     }) || []
 
-    // Getting App URL from env for QR generation
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
+    // Fetch feature flags + all parallel data
+    const [features, { data: serviceRequests }, { data: activeShift }, { data: shiftHistory }, { data: paymentClaims }] = await Promise.all([
+        getRestaurantFeatures(restaurantId),
+        supabase
+            .from('service_requests')
+            .select('*, sessions(tables(label))')
+            .eq('restaurant_id', restaurantId)
+            .in('status', ['pending', 'acknowledged'])
+            .order('created_at', { ascending: false })
+            .limit(20),
+        adminSupabase
+            .from('staff_shifts')
+            .select('*')
+            .eq('user_id', userId)
+            .is('clock_out', null)
+            .order('clock_in', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        adminSupabase
+            .from('staff_shifts')
+            .select('*')
+            .eq('user_id', userId)
+            .not('clock_out', 'is', null)
+            .order('clock_in', { ascending: false })
+            .limit(5),
+        adminSupabase
+            .from('payment_verifications')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+    ])
+
     return (
-        <TableManager
-            initialTables={mappedTables as unknown as TableWithSession[]}
-            restaurantId={restaurantId}
-            appUrl={appUrl}
-        />
+        <div className="space-y-6 p-4">
+            {/* Staff Shift Clock — gated */}
+            {features?.staffShiftsEnabled && (
+                <StaffShiftClock
+                    userId={userId}
+                    restaurantId={restaurantId}
+                    initialShift={activeShift || null}
+                    initialHistory={shiftHistory || []}
+                />
+            )}
+
+            {/* Nepal Payment Verification Feed — gated */}
+            {features?.nepalPayEnabled && (
+                <PaymentVerificationFeed
+                    initialClaims={(paymentClaims || []) as any[]}
+                    restaurantId={restaurantId}
+                    userId={userId}
+                />
+            )}
+
+            {/* Service Request Feed — gated */}
+            {features?.serviceRequestsEnabled !== false && (
+                <ServiceRequestFeed
+                    initialRequests={(serviceRequests || []) as any[]}
+                    restaurantId={restaurantId}
+                    userId={userId}
+                />
+            )}
+
+            <TableManager
+                initialTables={mappedTables as unknown as TableWithSession[]}
+                restaurantId={restaurantId}
+                appUrl={appUrl}
+            />
+        </div>
     )
 }

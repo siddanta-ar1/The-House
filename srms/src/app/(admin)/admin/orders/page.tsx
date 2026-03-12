@@ -1,26 +1,14 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createAdminClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import { formatCurrency } from '@/lib/utils'
 import { ShoppingBag, Filter } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminOrdersPage() {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) redirect('/admin')
+    const { restaurantId } = await getCurrentUser()
 
     const adminSupabase = await createAdminClient()
-    const { data: userData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id')
-        .eq('id', user.id)
-        .single()
-
-    if (!userData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = userData.restaurant_id
 
     // Fetch last 100 orders
     const { data: orders } = await adminSupabase

@@ -1,8 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import MenuGrid from '@/components/customer/MenuGrid'
-import CategoryNav from '@/components/customer/CategoryNav'
+import MenuSection from '@/components/customer/MenuSection'
 import CartSummary from '@/components/customer/CartSummary'
+import ServiceRequestPanel from '@/components/customer/ServiceRequestPanel'
+import { getRestaurantFeatures } from '@/lib/features'
+import Image from 'next/image'
+import type { MenuItem } from '@/types/database'
 
 export const revalidate = 60 // ISR: Revalidate at most every 60 seconds
 
@@ -14,7 +17,7 @@ export default async function CustomerMenuPage(props: {
     const searchParams = await props.searchParams;
     // 1. Session & Table Validation
     const tableToken = params.tableSlug
-    const sessionToken = searchParams.s
+    let sessionToken = searchParams.s
 
     const supabase = await createAdminClient()
 
@@ -30,14 +33,48 @@ export default async function CustomerMenuPage(props: {
     const restaurantId = tableData.restaurant_id
     const restaurantName = (tableData.restaurants as unknown as { name: string })?.name || 'Smart Restaurant'
 
-    // If a session token is provided, we would ideally rotate the token here
-    // and set a secure HttpOnly cookie for the customer session.
-    // For the MVP, we rely on the session token string.
+    // Auto-create session if none provided (customer just scanned the QR code)
+    if (!sessionToken) {
+        // Check for an existing active session on this table
+        const { data: existingSession } = await supabase
+            .from('sessions')
+            .select('id, session_token')
+            .eq('table_id', tableData.id)
+            .eq('status', 'active')
+            .order('opened_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+
+        if (existingSession) {
+            sessionToken = existingSession.session_token
+        } else {
+            // Create a new session for this table
+            const newToken = `s-${crypto.randomUUID().slice(0, 12)}`
+            const fourHoursFromNow = new Date()
+            fourHoursFromNow.setHours(fourHoursFromNow.getHours() + 4)
+            const { data: newSession } = await supabase
+                .from('sessions')
+                .insert({
+                    table_id: tableData.id,
+                    restaurant_id: restaurantId,
+                    session_token: newToken,
+                    status: 'active',
+                    opened_by: 'customer_scan',
+                    expires_at: fourHoursFromNow.toISOString(),
+                })
+                .select('id, session_token')
+                .single()
+
+            if (newSession) {
+                sessionToken = newSession.session_token
+            }
+        }
+    }
+
     const isValidSession = !!sessionToken
 
-    // 2. Fetch Menu Data
-    // Using the covering index for optimal performance
-    const [{ data: categories }, { data: menuItems }] = await Promise.all([
+    // 2. Fetch Menu Data + Feature Flags in parallel
+    const [{ data: categories }, { data: rawMenuItems }, features] = await Promise.all([
         supabase
             .from('menu_categories')
             .select('*')
@@ -47,10 +84,24 @@ export default async function CustomerMenuPage(props: {
 
         supabase
             .from('menu_items')
-            .select('*')
+            .select('*, menu_item_modifier_groups(*, menu_item_modifiers(*))')
             .eq('restaurant_id', restaurantId)
-            .eq('is_available', true)
+            .eq('is_available', true),
+
+        getRestaurantFeatures(restaurantId),
     ])
+
+    // Normalize DB field names → client-side field names
+    // menu_item_modifier_groups → modifier_groups, menu_item_modifiers → modifiers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const menuItems = (rawMenuItems || []).map((item: Record<string, any>) => ({
+        ...item,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        modifier_groups: (item.menu_item_modifier_groups || []).map((g: Record<string, any>) => ({
+            ...g,
+            modifiers: g.menu_item_modifiers || [],
+        })),
+    })) as MenuItem[]
 
     return (
         <div className="min-h-screen bg-gray-50 pb-24">
@@ -68,28 +119,39 @@ export default async function CustomerMenuPage(props: {
                             )}
                         </p>
                     </div>
-                    <div className="h-12 w-12 bg-gray-200 rounded-full overflow-hidden">
-                        {/* Logo placeholder */}
-                        <div className="w-full h-full bg-[var(--color-primary)] opacity-20"></div>
+                    <div className="h-12 w-auto">
+                        <Image
+                            src="/icons/kkhane.png"
+                            alt="KKhane"
+                            width={120}
+                            height={34}
+                            className="h-full w-auto object-contain"
+                            priority
+                        />
                     </div>
                 </div>
             </header>
 
             <main className="max-w-2xl mx-auto px-4 mt-6">
-                <CategoryNav categories={categories || []} />
-
-                <div className="mt-8">
-                    <MenuGrid
-                        categories={categories || []}
-                        items={menuItems || []}
-                        sessionId={sessionToken}
-                        restaurantSlug={restaurantId} // Internal ID for now
-                    />
-                </div>
+                <MenuSection
+                    categories={categories || []}
+                    items={menuItems || []}
+                    sessionId={sessionToken}
+                    restaurantSlug={tableToken}
+                    restaurantId={restaurantId}
+                />
             </main>
 
+            {/* Service Requests — gated by features_v2 flag */}
+            {isValidSession && sessionToken && features?.serviceRequestsEnabled !== false && (
+                <ServiceRequestPanel
+                    sessionId={sessionToken}
+                    restaurantId={restaurantId}
+                />
+            )}
+
             {/* Persistent Bottom Cart Summary */}
-            <CartSummary sessionId={sessionToken} />
+            <CartSummary sessionId={sessionToken} tableSlug={tableToken} />
         </div>
     )
 }

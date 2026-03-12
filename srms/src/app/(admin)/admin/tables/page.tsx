@@ -1,27 +1,12 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth'
+import { createAdminClient } from '@/lib/supabase/server'
 import TableManager from '@/components/admin/TableManager'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TablesManagementPage() {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) redirect('/admin')
-
+    const { restaurantId } = await getCurrentUser()
     const adminSupabase = await createAdminClient()
-
-    // Get current user's restaurant_id
-    const { data: currentUserData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id')
-        .eq('id', user.id)
-        .single()
-
-    if (!currentUserData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = currentUserData.restaurant_id
 
     // Fetch all tables
     const { data: tables } = await adminSupabase

@@ -19,18 +19,25 @@ export const viewport: Viewport = {
 }
 
 export const metadata = {
-  title: 'Smart Restaurant',
+  title: 'KKhane',
   description: 'Mobile-first restaurant ordering system',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icons/kkhane.png',
+    apple: '/icons/icon-192x192.png',
+  },
 }
 
 // Fetch theme from settings or use defaults
 async function getThemeConfig() {
   try {
     const supabase = await createServerClient()
+    // Use ORDER BY for deterministic result in single-tenant,
+    // and updated_at desc to prefer the most recently edited restaurant's theme
     const { data } = await supabase
       .from('settings')
       .select('theme')
+      .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 

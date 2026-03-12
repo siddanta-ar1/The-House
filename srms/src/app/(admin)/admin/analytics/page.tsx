@@ -1,27 +1,14 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createServerClient } from '@/lib/supabase/server'
+import { getCurrentUser } from '@/lib/auth'
 import { formatCurrency } from '@/lib/utils'
 import { BarChart, DollarSign, Users, ShoppingCart, TrendingUp } from 'lucide-react'
 
 export const revalidate = 60 // Cache analytics for 60 seconds
 
 export default async function AnalyticsPage() {
+    const { restaurantId } = await getCurrentUser()
+
     const supabase = await createServerClient()
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/admin')
-
-    // Use admin client to bypass RLS for user/role lookup (safe — server-only)
-    const adminSupabase = await createAdminClient()
-    const { data: userData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id')
-        .eq('id', user.id)
-        .single()
-
-    if (!userData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = userData.restaurant_id
 
     // Date ranges
     const today = new Date()

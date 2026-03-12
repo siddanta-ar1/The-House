@@ -1,15 +1,12 @@
+import { getCurrentUser } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
 import ThemeCustomizer from '@/components/admin/ThemeCustomizer'
-import { redirect } from 'next/navigation'
 
 export const revalidate = 0
 
 export default async function AdminThemePage() {
+    await getCurrentUser()
     const supabase = await createServerClient()
-
-    // Verify super_admin access
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/admin')
 
     // We assume there's one settings row for simplicity (or we'd fetch by restaurant_id)
     const { data: settings } = await supabase

@@ -1,17 +1,15 @@
 'use client'
 
-import { useState } from 'react'
 import MenuItemCard from './MenuItemCard'
-import type { MenuCategory, MenuItem } from '@/types/database'
+import type { MenuItem } from '@/types/database'
 
-export default function MenuGrid({ categories, items, sessionId, restaurantSlug }: {
-    categories: MenuCategory[],
+export default function MenuGrid({ items, sessionId, restaurantSlug, restaurantId, activeCategory }: {
     items: MenuItem[],
     sessionId?: string,
-    restaurantSlug: string
+    restaurantSlug: string,
+    restaurantId?: string,
+    activeCategory: string,
 }) {
-    const [activeCategory, setActiveCategory] = useState(categories[0]?.id || 'all')
-
     const filteredItems = items.filter((item) =>
         (activeCategory === 'all' || item.category_id === activeCategory)
     )
@@ -24,6 +22,7 @@ export default function MenuGrid({ categories, items, sessionId, restaurantSlug 
                     item={item}
                     sessionId={sessionId}
                     restaurantSlug={restaurantSlug}
+                    restaurantId={restaurantId}
                 />
             ))}
 

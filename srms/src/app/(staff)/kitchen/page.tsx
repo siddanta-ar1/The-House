@@ -1,29 +1,21 @@
+import { getCurrentUser } from '@/lib/auth'
 import { createServerClient } from '@/lib/supabase/server'
-import { getJwtClaims } from '@/lib/supabase/jwt'
 import OrderQueue from '@/components/kitchen/OrderQueue'
-import { redirect } from 'next/navigation'
+import TakeoutQueue from '@/components/kitchen/TakeoutQueue'
+import { getRestaurantFeatures } from '@/lib/features'
 
 export const revalidate = 0 // Never cache the kitchen page securely
 
 export default async function KitchenPage() {
+    const { restaurantId } = await getCurrentUser()
     const supabase = await createServerClient()
 
-    // Get current user session via Server Component
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) redirect('/admin')
-
-    // Extract restaurant_id from JWT custom claims (injected by 004_jwt_claims_hook.sql)
-    // No admin DB roundtrip needed — the data is embedded in the access token
-    const claims = await getJwtClaims()
-    const restaurantId = claims?.restaurant_id
-    if (!restaurantId) redirect('/unauthorized')
-
-    // Fetch initial active orders for this restaurant
-    // After initial hydration, the OrderQueue component relies purely on
-    // Supabase Realtime — no full DB refetch on page refresh needed
-    const { data: activeOrders } = await supabase
-        .from('orders')
-        .select(`
+    // Fetch feature flags, active orders + takeout orders in parallel
+    const [features, { data: activeOrders }, { data: takeoutOrders }] = await Promise.all([
+        getRestaurantFeatures(restaurantId),
+        supabase
+            .from('orders')
+            .select(`
       id,
       status,
       total_amount,
@@ -38,16 +30,30 @@ export default async function KitchenPage() {
         order_item_modifiers ( modifier_name, price_adjustment )
       )
     `)
-        .eq('restaurant_id', restaurantId)
-        .in('status', ['pending', 'confirmed', 'preparing'])
-        .order('placed_at', { ascending: true })
+            .eq('restaurant_id', restaurantId)
+            .in('status', ['pending', 'confirmed', 'preparing'])
+            .order('placed_at', { ascending: true }),
+        supabase
+            .from('takeout_orders')
+            .select('*')
+            .eq('restaurant_id', restaurantId)
+            .in('status', ['confirmed', 'preparing'])
+            .order('pickup_time', { ascending: true }),
+    ])
 
     return (
-        <div className="h-full">
+        <div className="h-full space-y-6 p-4 overflow-y-auto">
             <OrderQueue
                 initialOrders={activeOrders as unknown as any[]}
                 restaurantId={restaurantId}
             />
+            {/* TakeoutQueue — only shown if takeout is enabled */}
+            {features?.takeoutEnabled && (
+                <TakeoutQueue
+                    initialOrders={(takeoutOrders || []) as any[]}
+                    restaurantId={restaurantId}
+                />
+            )}
         </div>
     )
 }

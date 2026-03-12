@@ -1,8 +1,9 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { Utensils, LogOut, Settings } from 'lucide-react'
+import { Utensils, LogOut, Settings, Bell } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -21,13 +22,15 @@ export default function WaiterLayoutClient({ children }: { children: ReactNode }
             {/* Top Navbar — responsive */}
             <header className="bg-white border-b border-gray-200 px-3 md:px-6 py-2.5 md:py-3 shrink-0 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2 md:gap-3">
-                    <div className="bg-[var(--color-secondary)] p-1.5 md:p-2 rounded-lg text-white">
-                        <Utensils size={20} />
-                    </div>
-                    <h1 className="text-base md:text-xl font-bold tracking-tight text-gray-900">
-                        <span className="hidden sm:inline">Operations Panel</span>
-                        <span className="sm:hidden">Floor</span>
-                    </h1>
+                    <Image
+                        src="/icons/kkhane.png"
+                        alt="KKhane"
+                        width={100}
+                        height={28}
+                        className="h-7 w-auto object-contain"
+                        priority
+                    />
+                    <span className="text-xs text-gray-500 font-medium">Operations</span>
                 </div>
 
                 <div className="flex items-center gap-2 md:gap-4">

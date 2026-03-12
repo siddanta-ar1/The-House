@@ -6,12 +6,14 @@ import { formatCurrency } from '@/lib/utils'
 import { ShoppingBag } from 'lucide-react'
 import Link from 'next/link'
 
-export default function CartSummary({ sessionId }: { sessionId?: string }) {
+export default function CartSummary({ sessionId, tableSlug }: { sessionId?: string; tableSlug?: string }) {
     const totalItems = useHydratedStore(useCartStore, (s) => s.totalItems)
     const totalAmount = useHydratedStore(useCartStore, (s) => s.totalAmount)
+    const storeSlug = useHydratedStore(useCartStore, (s) => s.restaurantSlug)
 
     const count = totalItems()
     const amount = totalAmount()
+    const slug = tableSlug || storeSlug || 'menu'
 
     // Don't show if empty or if no active session (view only mode)
     if (count === 0 || !sessionId) return null
@@ -20,7 +22,7 @@ export default function CartSummary({ sessionId }: { sessionId?: string }) {
         <div className="fixed bottom-0 left-0 right-0 p-4 z-50 bg-gradient-to-t from-white via-white to-transparent pointer-events-none">
             <div className="max-w-2xl mx-auto pointer-events-auto">
                 <Link
-                    href={`/t/placeholder/checkout`} // Will fix real path mapping via store state context later
+                    href={`/t/${slug}/checkout`}
                     className="flex items-center justify-between w-full bg-[var(--color-primary)] text-white p-4 rounded-xl shadow-xl shadow-[var(--color-primary)]/20 active:scale-[0.98] transition-transform"
                 >
                     <div className="flex items-center gap-3">

@@ -1,5 +1,5 @@
 import { stripe } from '@/lib/stripe'
-import { createServerClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
@@ -29,9 +29,9 @@ export async function POST(req: Request) {
         const orderId = paymentIntent.metadata?.orderId
 
         if (orderId) {
-            const supabase = await createServerClient()
+            const supabase = await createAdminClient()
 
-            // Update order status in DB (e.g., mark as confirmed or paid)
+            // Update order status in DB — using admin client to bypass RLS
             const { error } = await supabase
                 .from('orders')
                 .update({ status: 'confirmed' })

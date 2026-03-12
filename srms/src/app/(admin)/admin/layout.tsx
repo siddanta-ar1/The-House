@@ -1,26 +1,17 @@
 import { ReactNode } from 'react'
 import AdminSidebar from '@/components/admin/AdminSidebar'
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
+import { getOptionalUser } from '@/lib/auth'
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const currentUser = await getOptionalUser()
 
     // If not logged in, render children directly (the login page at /admin)
     // This prevents the infinite redirect loop
-    if (!user) {
+    if (!currentUser) {
         return <>{children}</>
     }
 
-    // Role lookup bypassing RLS (safe in server layout)
-    const adminSupabase = await createAdminClient()
-    const { data: userData } = await adminSupabase
-        .from('users')
-        .select('role_id, roles(name)')
-        .eq('id', user.id)
-        .single()
-
-    const roleNameRaw = (userData?.roles as unknown as { name: string } | null)?.name || 'unknown'
+    const roleNameRaw = currentUser.role || 'unknown'
 
     // Format role for display (e.g., "super_admin" -> "Super Admin")
     const roleDisplay = roleNameRaw
@@ -31,7 +22,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     return (
         <div className="min-h-screen bg-gray-50 flex font-['var(--font-roboto)']">
             {/* Sidebar (Client Component — drawer on mobile, fixed on desktop) */}
-            <AdminSidebar />
+            <AdminSidebar userRole={roleNameRaw} />
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col overflow-hidden min-w-0">

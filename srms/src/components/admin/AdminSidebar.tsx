@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { LayoutDashboard, Users, UtensilsCrossed, Settings, LogOut, BarChart3, Palette, Grid3X3, Menu, X, TrendingUp, ShoppingBag } from 'lucide-react'
+import { LayoutDashboard, Users, UtensilsCrossed, Settings, LogOut, BarChart3, Palette, Grid3X3, Menu, X, TrendingUp, ShoppingBag, Tag, Heart, DollarSign, Package, FileText, Truck, Clock, Building } from 'lucide-react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function AdminSidebar() {
+export default function AdminSidebar({ userRole }: { userRole?: string }) {
     const pathname = usePathname()
     const router = useRouter()
     const supabase = createClient()
@@ -27,10 +28,14 @@ export default function AdminSidebar() {
         <>
             <div className="p-5 md:p-6 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <div className="bg-[var(--color-primary)] p-2 rounded-lg text-white">
-                        <LayoutDashboard size={20} />
-                    </div>
-                    <h1 className="text-lg font-bold text-gray-900 leading-tight">Admin<br /><span className="text-[var(--color-secondary)] text-sm">Dashboard</span></h1>
+                    <Image
+                        src="/icons/kkhane.png"
+                        alt="KKhane"
+                        width={120}
+                        height={34}
+                        className="h-8 w-auto object-contain"
+                        priority
+                    />
                 </div>
                 {/* Close button — mobile only */}
                 <button
@@ -45,13 +50,32 @@ export default function AdminSidebar() {
                 <NavLink href="/admin/dashboard" icon={BarChart3} label="Overview" currentPath={pathname} />
                 <NavLink href="/admin/menu" icon={UtensilsCrossed} label="Menu" currentPath={pathname} />
                 <NavLink href="/admin/orders" icon={ShoppingBag} label="Orders" currentPath={pathname} />
+                <NavLink href="/admin/takeout" icon={Truck} label="Takeout" currentPath={pathname} />
                 <NavLink href="/admin/staff" icon={Users} label="Staff" currentPath={pathname} />
                 <NavLink href="/admin/tables" icon={Grid3X3} label="Tables & QR" currentPath={pathname} />
                 <NavLink href="/admin/analytics" icon={TrendingUp} label="Analytics" currentPath={pathname} />
+
+                <div className="pt-3 mt-3 border-t border-gray-100">
+                    <h4 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Revenue</h4>
+                    <NavLink href="/admin/pricing" icon={DollarSign} label="Dynamic Pricing" currentPath={pathname} />
+                    <NavLink href="/admin/promos" icon={Tag} label="Promo Codes" currentPath={pathname} />
+                    <NavLink href="/admin/loyalty" icon={Heart} label="Loyalty Program" currentPath={pathname} />
+                    <NavLink href="/admin/reports" icon={FileText} label="EOD Reports" currentPath={pathname} />
+                </div>
+
+                <div className="pt-3 mt-3 border-t border-gray-100">
+                    <h4 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Operations</h4>
+                    <NavLink href="/admin/ingredients" icon={Package} label="Ingredients" currentPath={pathname} />
+                    <NavLink href="/admin/shifts" icon={Clock} label="Staff Shifts" currentPath={pathname} />
+                </div>
+
                 <div className="pt-3 mt-3 border-t border-gray-100">
                     <h4 className="px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Config</h4>
                     <NavLink href="/admin/theme" icon={Palette} label="Brand & Theme" currentPath={pathname} />
                     <NavLink href="/admin/settings" icon={Settings} label="Settings" currentPath={pathname} />
+                    {userRole === 'super_admin' && (
+                        <NavLink href="/admin/super-admin" icon={Building} label="SaaS Panel" currentPath={pathname} />
+                    )}
                 </div>
             </nav>
 

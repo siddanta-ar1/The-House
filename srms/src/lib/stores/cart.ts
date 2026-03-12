@@ -50,7 +50,23 @@ export const useCartStore = create<CartState>()(
             loyaltyDiscount: 0,
 
             setSession: (sessionId, restaurantSlug, restaurantId) =>
-                set({ sessionId, restaurantSlug, restaurantId: restaurantId || null }),
+                set((state) => {
+                    // If switching to a different restaurant, clear the cart
+                    const isSameRestaurant = state.restaurantId === (restaurantId || null)
+                    if (!isSameRestaurant && state.items.length > 0) {
+                        return {
+                            sessionId,
+                            restaurantSlug,
+                            restaurantId: restaurantId || null,
+                            items: [],
+                            promoCode: null,
+                            promoDiscount: 0,
+                            loyaltyMember: null,
+                            loyaltyDiscount: 0,
+                        }
+                    }
+                    return { sessionId, restaurantSlug, restaurantId: restaurantId || null }
+                }),
 
             addItem: (item) =>
                 set((state) => {
@@ -100,6 +116,9 @@ export const useCartStore = create<CartState>()(
 
             clearCart: () => set({
                 items: [],
+                sessionId: null,
+                restaurantSlug: null,
+                restaurantId: null,
                 promoCode: null,
                 promoDiscount: 0,
                 loyaltyMember: null,

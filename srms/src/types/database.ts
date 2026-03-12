@@ -21,6 +21,10 @@ export interface Role {
     description: string | null
 }
 
+export type SubscriptionTier = 'free' | 'basic' | 'pro' | 'enterprise'
+export type SubscriptionStatus = 'active' | 'past_due' | 'suspended' | 'cancelled'
+export type PaymentMethod = 'qr_scan' | 'esewa' | 'khalti' | 'fonepay' | 'cash' | 'card' | 'stripe'
+
 export interface Restaurant {
     id: string
     owner_id: string | null
@@ -29,6 +33,22 @@ export interface Restaurant {
     logo_url: string | null
     is_active: boolean
     created_at: string
+    updated_at: string
+    // Nepal business fields
+    contact_phone: string | null
+    contact_email: string | null
+    address: string | null
+    pan_number: string | null
+    vat_registered: boolean
+    payment_qr_url: string | null
+    payment_qr_label: string
+    // SaaS fields
+    custom_domain: string | null
+    subscription_tier: SubscriptionTier
+    subscription_status: SubscriptionStatus
+    subscription_expires_at: string | null
+    stripe_customer_id: string | null
+    stripe_subscription_id: string | null
 }
 
 export interface User {
@@ -80,7 +100,8 @@ export interface MenuItem {
     updated_at: string
     // Joined fields
     menu_categories?: MenuCategory
-    modifier_groups?: ModifierGroup[]
+    modifier_groups?: ModifierGroup[]  // alias used client-side
+    menu_item_modifier_groups?: ModifierGroup[]  // actual DB relation name
 }
 
 export interface ModifierGroup {
@@ -92,7 +113,8 @@ export interface ModifierGroup {
     sort_order: number
     created_at: string
     // Joined fields
-    modifiers?: Modifier[]
+    modifiers?: Modifier[]  // alias used client-side
+    menu_item_modifiers?: Modifier[]  // actual DB relation name
 }
 
 export interface Modifier {
@@ -201,6 +223,7 @@ export interface Settings {
     }
     features_v2: {
         loyaltyEnabled: boolean
+        promosEnabled: boolean
         takeoutEnabled: boolean
         multiLanguageEnabled: boolean
         serviceRequestsEnabled: boolean
@@ -211,6 +234,11 @@ export interface Settings {
         defaultTaxRate: number
         currency: string
         currencySymbol: string
+        // Nepal-specific
+        nepalPayEnabled: boolean
+        vatEnabled: boolean
+        phoneOtpEnabled: boolean
+        bsDateEnabled: boolean
     }
     business_hours: Record<string, unknown> | null
     updated_at: string
@@ -525,4 +553,78 @@ export interface CartItem {
     specialRequest?: string
     imageUrl?: string
     modifiers?: CartItemModifier[]
+}
+
+// ============================================================
+// Nepal Payment Verification (QR-based)
+// ============================================================
+export interface PaymentVerification {
+    id: string
+    restaurant_id: string
+    order_id: string | null
+    takeout_order_id: string | null
+    amount: number
+    payment_method: PaymentMethod
+    customer_claimed_at: string
+    staff_verified: boolean
+    staff_verified_by: string | null
+    staff_verified_at: string | null
+    staff_rejected: boolean
+    rejection_reason: string | null
+    reference_code: string | null
+    created_at: string
+}
+
+// ============================================================
+// SaaS Subscription Plans
+// ============================================================
+export interface SubscriptionPlan {
+    id: string
+    name: string
+    price_monthly: number
+    price_yearly: number
+    currency: string
+    max_menu_items: number
+    max_staff: number
+    max_tables: number
+    max_orders_per_month: number | null
+    features_included: Record<string, boolean>
+    is_active: boolean
+    created_at: string
+}
+
+// ============================================================
+// Invoice Sequence (IRD compliance)
+// ============================================================
+export interface InvoiceSequence {
+    restaurant_id: string
+    current_number: number
+    prefix: string
+    fiscal_year: string
+    updated_at: string
+}
+
+// ============================================================
+// Phone OTP Token
+// ============================================================
+export interface PhoneOtpToken {
+    id: string
+    phone: string
+    otp_code: string
+    purpose: 'login' | 'verify' | 'loyalty_signup'
+    restaurant_id: string | null
+    expires_at: string
+    used: boolean
+    created_at: string
+}
+
+// ============================================================
+// Plan Limit Check Result
+// ============================================================
+export interface PlanLimitResult {
+    allowed: boolean
+    current?: number
+    max?: number
+    tier?: string
+    reason: string
 }

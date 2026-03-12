@@ -1,35 +1,25 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { getCurrentUser } from '@/lib/auth'
 import SettingsManager from '@/components/admin/SettingsManager'
+import { getRestaurantFeatures } from '@/lib/features'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
-    const supabase = await createServerClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) redirect('/admin')
+    const { restaurantId, role } = await getCurrentUser()
 
     const adminSupabase = await createAdminClient()
 
-    // Get current user's restaurant_id and role to determine access level
-    const { data: currentUserData } = await adminSupabase
-        .from('users')
-        .select('restaurant_id, roles(name)')
-        .eq('id', user.id)
-        .single()
-
-    if (!currentUserData?.restaurant_id) redirect('/unauthorized')
-
-    const restaurantId = currentUserData.restaurant_id
-    const userRole = (currentUserData.roles as unknown as { name: string } | null)?.name || ''
-
-    // Fetch current restaurant settings
-    const { data: restaurant } = await adminSupabase
-        .from('restaurants')
-        .select('*')
-        .eq('id', restaurantId)
-        .single()
+    // Fetch restaurant + feature flags in parallel
+    const [{ data: restaurant }, features] = await Promise.all([
+        adminSupabase
+            .from('restaurants')
+            .select('*')
+            .eq('id', restaurantId)
+            .single(),
+        getRestaurantFeatures(restaurantId),
+    ])
 
     if (!restaurant) redirect('/unauthorized')
 
@@ -46,7 +36,8 @@ export default async function SettingsPage() {
 
             <SettingsManager
                 initialRestaurant={restaurant}
-                canEdit={userRole === 'super_admin' || userRole === 'manager'}
+                initialFeatures={features}
+                canEdit={role === 'super_admin' || role === 'manager'}
             />
         </div>
     )
