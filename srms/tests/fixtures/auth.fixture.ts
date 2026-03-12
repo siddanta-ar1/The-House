@@ -3,6 +3,10 @@ import { test as base, expect, type Page, type BrowserContext } from '@playwrigh
 
 // ─── Credentials ───
 export const CREDENTIALS = {
+    superAdmin: {
+        email: process.env.TEST_SUPER_ADMIN_EMAIL || 'demo@srms.app',
+        password: process.env.TEST_SUPER_ADMIN_PASSWORD || 'Password123!',
+    },
     manager: {
         email: process.env.TEST_MANAGER_EMAIL || 'manager@srms.app',
         password: process.env.TEST_MANAGER_PASSWORD || 'Password123!',
@@ -102,6 +106,8 @@ export async function loginAs(
 
 // ─── Authenticated Page Fixtures ───
 type AuthFixtures = {
+    superAdminPage: Page
+    superAdminContext: BrowserContext
     managerPage: Page
     waiterPage: Page
     waiterContext: BrowserContext
@@ -109,6 +115,20 @@ type AuthFixtures = {
 }
 
 export const test = base.extend<AuthFixtures>({
+    superAdminContext: async ({ browser }, use) => {
+        const context = await browser.newContext()
+        await use(context)
+        await context.close()
+    },
+
+    superAdminPage: async ({ superAdminContext }, use) => {
+        const page = await superAdminContext.newPage()
+        await loginAs(page, CREDENTIALS.superAdmin.email, CREDENTIALS.superAdmin.password, {
+            expectedRoute: /admin/,
+        })
+        await use(page)
+    },
+
     managerPage: async ({ page }, use) => {
         await loginAs(page, CREDENTIALS.manager.email, CREDENTIALS.manager.password, {
             expectedRoute: /admin/,

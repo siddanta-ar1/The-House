@@ -1,9 +1,244 @@
 import { type Page, expect } from '@playwright/test'
 
 /**
- * Page-Object helpers for the Admin dashboard, menu, reports, and shifts pages.
+ * Page-Object helpers for the Admin dashboard, menu, reports, shifts,
+ * Super Admin SaaS panel, and Settings pages.
  * Encapsulates selectors so tests stay declarative and resilient to UI changes.
  */
+
+// ─────────────────────────────────────────────
+// Super Admin SaaS Dashboard
+// ─────────────────────────────────────────────
+export class SuperAdminDashboardPage {
+    constructor(private page: Page) {}
+
+    async goto() {
+        await this.page.goto('/admin/super-admin')
+    }
+
+    async expectLoaded() {
+        await expect(
+            this.page.getByRole('heading', { name: 'SaaS Control Panel' })
+        ).toBeVisible({ timeout: 15_000 })
+    }
+
+    async expectMetricsCards() {
+        await expect(this.page.getByText('Total Restaurants')).toBeVisible({ timeout: 5_000 })
+        await expect(this.page.getByText('Active')).toBeVisible()
+        await expect(this.page.getByText('Total Orders')).toBeVisible()
+        await expect(this.page.getByText('Pro+ Accounts')).toBeVisible()
+    }
+
+    async expectSubscriptionDistribution() {
+        await expect(
+            this.page.getByRole('heading', { name: 'Subscription Distribution' })
+        ).toBeVisible({ timeout: 5_000 })
+    }
+
+    async expectRestaurantList() {
+        await expect(
+            this.page.getByRole('heading', { name: 'All Restaurants' })
+        ).toBeVisible({ timeout: 5_000 })
+    }
+
+    /** Get the metric value for a given card label */
+    async getMetricValue(label: string): Promise<string> {
+        const card = this.page.locator('div').filter({ hasText: label }).first()
+        const value = card.locator('.text-2xl').first()
+        await expect(value).toBeVisible({ timeout: 5_000 })
+        return (await value.textContent()) || '0'
+    }
+
+    /** Get the number of restaurant rows visible */
+    async getRestaurantCount(): Promise<number> {
+        // Each restaurant row has a tier select
+        const selects = this.page.locator('select')
+        return selects.count()
+    }
+
+    /** Find a restaurant row by name and return its container locator */
+    private restaurantRow(name: string) {
+        return this.page.locator('h4').filter({ hasText: name }).first()
+            .locator('xpath=ancestor::div[contains(@class,"flex")]').first()
+    }
+
+    /** Change subscription tier for a restaurant by name */
+    async changeTier(restaurantName: string, tier: 'free' | 'basic' | 'pro' | 'enterprise') {
+        // Find the restaurant's row
+        const nameEl = this.page.locator('h4').filter({ hasText: restaurantName }).first()
+        await expect(nameEl).toBeVisible({ timeout: 5_000 })
+
+        // The select is within the same row container
+        const row = nameEl.locator('xpath=ancestor::div[contains(@class,"p-4") or contains(@class,"p-6")]').first()
+        const select = row.locator('select')
+        await expect(select).toBeVisible({ timeout: 3_000 })
+        await select.selectOption(tier)
+    }
+
+    /** Get current tier badge text for a restaurant */
+    async getRestaurantTier(restaurantName: string): Promise<string> {
+        const nameEl = this.page.locator('h4').filter({ hasText: restaurantName }).first()
+        await expect(nameEl).toBeVisible({ timeout: 5_000 })
+
+        const row = nameEl.locator('xpath=ancestor::div[contains(@class,"p-4") or contains(@class,"p-6")]').first()
+        const badge = row.locator('span.text-xs.font-bold').first()
+        const text = await badge.textContent()
+        return (text || '').trim()
+    }
+
+    /** Suspend a restaurant by clicking its Suspend button */
+    async suspendRestaurant(restaurantName: string) {
+        const nameEl = this.page.locator('h4').filter({ hasText: restaurantName }).first()
+        const row = nameEl.locator('xpath=ancestor::div[contains(@class,"p-4") or contains(@class,"p-6")]').first()
+        const suspendBtn = row.locator('button').filter({ hasText: 'Suspend' })
+        await expect(suspendBtn).toBeVisible({ timeout: 3_000 })
+        await suspendBtn.click()
+    }
+
+    /** Reactivate a suspended restaurant */
+    async reactivateRestaurant(restaurantName: string) {
+        const nameEl = this.page.locator('h4').filter({ hasText: restaurantName }).first()
+        const row = nameEl.locator('xpath=ancestor::div[contains(@class,"p-4") or contains(@class,"p-6")]').first()
+        const reactivateBtn = row.locator('button').filter({ hasText: 'Reactivate' })
+        await expect(reactivateBtn).toBeVisible({ timeout: 3_000 })
+        await reactivateBtn.click()
+    }
+
+    /** Check if a restaurant shows the SUSPENDED badge */
+    async isRestaurantSuspended(restaurantName: string): Promise<boolean> {
+        const nameEl = this.page.locator('h4').filter({ hasText: restaurantName }).first()
+        const row = nameEl.locator('xpath=ancestor::div[contains(@class,"p-4") or contains(@class,"p-6")]').first()
+        const suspendedBadge = row.locator('span').filter({ hasText: 'SUSPENDED' })
+        return suspendedBadge.isVisible({ timeout: 2_000 }).catch(() => false)
+    }
+
+    /** Get the first restaurant name visible in the list */
+    async getFirstRestaurantName(): Promise<string> {
+        // Wait for the "All Restaurants" section to load
+        await expect(
+            this.page.getByRole('heading', { name: 'All Restaurants' })
+        ).toBeVisible({ timeout: 10_000 })
+
+        // Look for any h4 (restaurant name) after the "All Restaurants" heading
+        const firstH4 = this.page.locator('h4').filter({ hasNotText: /Subscription|All Restaurants/ }).first()
+        const isVisible = await firstH4.isVisible({ timeout: 5_000 }).catch(() => false)
+        if (!isVisible) {
+            // No restaurants — return empty
+            console.log('[SuperAdminDashboard] No restaurants found in list')
+            return ''
+        }
+        return ((await firstH4.textContent()) || '').trim()
+    }
+}
+
+// ─────────────────────────────────────────────
+// Settings Manager Page
+// ─────────────────────────────────────────────
+export class SettingsManagerPage {
+    constructor(private page: Page) {}
+
+    async goto() {
+        await this.page.goto('/admin/settings')
+    }
+
+    async expectLoaded() {
+        await expect(
+            this.page.getByRole('heading', { name: 'System Settings' })
+        ).toBeVisible({ timeout: 15_000 })
+    }
+
+    async expectGeneralInfoSection() {
+        await expect(
+            this.page.getByRole('heading', { name: 'General Information' })
+        ).toBeVisible({ timeout: 5_000 })
+    }
+
+    async expectFinancialRulesSection() {
+        await expect(
+            this.page.getByRole('heading', { name: 'Financial Rules' })
+        ).toBeVisible({ timeout: 5_000 })
+    }
+
+    async expectFeatureTogglesSection() {
+        await expect(
+            this.page.getByRole('heading', { name: 'Feature Flags' })
+        ).toBeVisible({ timeout: 5_000 })
+    }
+
+    /** Get the current restaurant name from the name input */
+    async getRestaurantName(): Promise<string> {
+        const nameInput = this.page.locator('input[name="name"]')
+        await expect(nameInput).toBeVisible({ timeout: 5_000 })
+        return (await nameInput.inputValue()) || ''
+    }
+
+    /** Update the restaurant name */
+    async setRestaurantName(name: string) {
+        const nameInput = this.page.locator('input[name="name"]')
+        await nameInput.clear()
+        await nameInput.fill(name)
+    }
+
+    /** Click save changes button and wait for success */
+    async saveChanges() {
+        const saveBtn = this.page.locator('button[type="submit"]').filter({ hasText: 'Save Changes' })
+        await saveBtn.click()
+        // Wait for success indication
+        await this.page.waitForTimeout(2_000)
+    }
+
+    /** Check if a feature toggle is currently enabled */
+    async isFeatureEnabled(featureLabel: string): Promise<boolean> {
+        const featureBtn = this.page.locator('button').filter({ hasText: featureLabel }).first()
+        await expect(featureBtn).toBeVisible({ timeout: 5_000 })
+        // Enabled features have bg-indigo-50 class
+        const classes = await featureBtn.getAttribute('class') || ''
+        return classes.includes('indigo')
+    }
+
+    /** Toggle a feature ON or OFF by clicking its button */
+    async toggleFeature(featureLabel: string) {
+        const featureBtn = this.page.locator('button').filter({ hasText: featureLabel }).first()
+        await expect(featureBtn).toBeVisible({ timeout: 5_000 })
+        await featureBtn.click()
+        // Wait for server action to persist
+        await this.page.waitForTimeout(1_500)
+    }
+
+    /** Ensure a feature is enabled (toggle ON if not) */
+    async ensureFeatureEnabled(featureLabel: string) {
+        const isEnabled = await this.isFeatureEnabled(featureLabel)
+        if (!isEnabled) {
+            await this.toggleFeature(featureLabel)
+        }
+    }
+
+    /** Ensure a feature is disabled (toggle OFF if enabled) */
+    async ensureFeatureDisabled(featureLabel: string) {
+        const isEnabled = await this.isFeatureEnabled(featureLabel)
+        if (isEnabled) {
+            await this.toggleFeature(featureLabel)
+        }
+    }
+
+    /** Get the current tax rate value */
+    async getTaxRate(): Promise<string> {
+        const taxInput = this.page.locator('input[name="tax_rate"]')
+        return (await taxInput.inputValue()) || ''
+    }
+
+    /** Get the current currency code */
+    async getCurrency(): Promise<string> {
+        const currInput = this.page.locator('input[name="currency"]')
+        return (await currInput.inputValue()) || ''
+    }
+
+    /** Check if the "You do not have permission" warning is shown */
+    async isReadOnly(): Promise<boolean> {
+        const warning = this.page.getByText('You do not have permission')
+        return warning.isVisible({ timeout: 2_000 }).catch(() => false)
+    }
+}
 
 // ─────────────────────────────────────────────
 // Admin Dashboard

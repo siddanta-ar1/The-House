@@ -10,6 +10,8 @@
     "test": "npx playwright test --project=chromium",
     "test:manager": "npx playwright test tests/daily-manager-flow-advanced.spec.ts --project=chromium",
     "test:manager:headed": "npx playwright test tests/daily-manager-flow-advanced.spec.ts --project=chromium --headed",
+    "test:saas": "npx playwright test tests/saas-founder-flow-advanced.spec.ts --project=chromium",
+    "test:saas:headed": "npx playwright test tests/saas-founder-flow-advanced.spec.ts --project=chromium --headed",
     "test:golden": "npx playwright test tests/golden-path.spec.ts --project=chromium",
     "test:all": "npx playwright test --project=chromium --reporter=html",
     "test:ci": "npx playwright test --project=chromium --reporter=github,html",

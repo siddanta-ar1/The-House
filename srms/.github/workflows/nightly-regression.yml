@@ -1,4 +1,4 @@
-name: SRMS Nightly Regression — Daily Manager Flow
+name: SRMS Nightly Regression — Full Suite
 
 on:
   schedule:
@@ -34,6 +34,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      TEST_SUPER_ADMIN_EMAIL: demo@srms.app
+      TEST_SUPER_ADMIN_PASSWORD: Password123!
       TEST_MANAGER_EMAIL: manager@srms.app
       TEST_MANAGER_PASSWORD: Password123!
       TEST_WAITER_EMAIL: waiter@srms.app
@@ -81,6 +83,13 @@ jobs:
           # Run tests with retries
           RETRIES=${{ github.event.inputs.retries || '3' }}
           npx playwright test tests/daily-manager-flow-advanced.spec.ts \
+            --project=chromium \
+            --reporter=github,html \
+            --retries=$RETRIES \
+            --timeout=120000
+
+          # Run SaaS Founder Flow
+          npx playwright test tests/saas-founder-flow-advanced.spec.ts \
             --project=chromium \
             --reporter=github,html \
             --retries=$RETRIES \

@@ -20,6 +20,7 @@ on:
         options:
           - all
           - daily-manager
+          - saas-founder
           - golden-path
           - service-request
           - takeout
@@ -237,6 +238,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - test_file: tests/saas-founder-flow-advanced.spec.ts
+            test_name: SaaS Founder Flow
+            artifact_prefix: saas-founder
           - test_file: tests/golden-path.spec.ts
             test_name: Golden Path
             artifact_prefix: golden-path
@@ -255,6 +259,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      TEST_SUPER_ADMIN_EMAIL: demo@srms.app
+      TEST_SUPER_ADMIN_PASSWORD: Password123!
       TEST_MANAGER_EMAIL: manager@srms.app
       TEST_MANAGER_PASSWORD: Password123!
       TEST_WAITER_EMAIL: waiter@srms.app
