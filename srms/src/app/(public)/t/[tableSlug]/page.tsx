@@ -33,6 +33,9 @@ export default async function CustomerMenuPage(props: {
     const restaurantId = tableData.restaurant_id
     const restaurantName = (tableData.restaurants as unknown as { name: string })?.name || 'Smart Restaurant'
 
+    // Track the session UUID (needed for FK references like service_requests.session_id)
+    let sessionUUID: string | undefined
+
     // Find active session for this table (opened by waiter)
     if (!sessionToken) {
         const { data: existingSession } = await supabase
@@ -47,6 +50,7 @@ export default async function CustomerMenuPage(props: {
 
         if (existingSession) {
             sessionToken = existingSession.session_token
+            sessionUUID = existingSession.id
         }
         // If no active session, customer sees menu in view-only mode
         // They need to ask the waiter to open a session for their table
@@ -62,6 +66,8 @@ export default async function CustomerMenuPage(props: {
 
         if (!validSession) {
             sessionToken = undefined // Session expired or invalid
+        } else {
+            sessionUUID = validSession.id
         }
     }
 
@@ -140,9 +146,9 @@ export default async function CustomerMenuPage(props: {
             </main>
 
             {/* Service Requests — gated by features_v2 flag */}
-            {isValidSession && sessionToken && features?.serviceRequestsEnabled !== false && (
+            {isValidSession && sessionUUID && features?.serviceRequestsEnabled !== false && (
                 <ServiceRequestPanel
-                    sessionId={sessionToken}
+                    sessionId={sessionUUID}
                     restaurantId={restaurantId}
                 />
             )}

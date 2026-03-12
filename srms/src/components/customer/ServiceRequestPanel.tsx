@@ -1,20 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, Droplets, Receipt, Sparkles, X, Loader2, Check } from 'lucide-react'
+import { Bell, Droplets, Receipt, Sparkles, UtensilsCrossed, X, Loader2, Check } from 'lucide-react'
 import { createServiceRequest } from '@/app/api/service-requests/actions'
 import type { ServiceRequestType } from '@/types/database'
 
-const REQUEST_OPTIONS: {
+type RequestOption = {
+    id: string            // unique key (may differ from DB type for presets that use 'other')
     type: ServiceRequestType
     label: string
     icon: typeof Bell
     color: string
-}[] = [
-        { type: 'call_waiter', label: 'Call Waiter', icon: Bell, color: 'bg-blue-500' },
-        { type: 'request_bill', label: 'Request Bill', icon: Receipt, color: 'bg-green-500' },
-        { type: 'need_water', label: 'Need Water', icon: Droplets, color: 'bg-cyan-500' },
-        { type: 'clean_table', label: 'Clean Table', icon: Sparkles, color: 'bg-amber-500' },
+    message?: string      // fixed message for presets that use 'other' type
+}
+
+const REQUEST_OPTIONS: RequestOption[] = [
+        { id: 'call_waiter', type: 'call_waiter', label: 'Call Waiter', icon: Bell, color: 'bg-blue-500' },
+        { id: 'request_bill', type: 'request_bill', label: 'Request Bill', icon: Receipt, color: 'bg-green-500' },
+        { id: 'need_water', type: 'need_water', label: 'Need Water', icon: Droplets, color: 'bg-cyan-500' },
+        { id: 'need_silverware', type: 'other', label: 'Need Silverware', icon: UtensilsCrossed, color: 'bg-orange-500', message: 'Need Silverware' },
+        { id: 'clean_table', type: 'clean_table', label: 'Clean Table', icon: Sparkles, color: 'bg-amber-500' },
     ]
 
 export default function ServiceRequestPanel({
@@ -25,20 +30,20 @@ export default function ServiceRequestPanel({
     restaurantId: string
 }) {
     const [isOpen, setIsOpen] = useState(false)
-    const [loading, setLoading] = useState<ServiceRequestType | null>(null)
-    const [success, setSuccess] = useState<ServiceRequestType | null>(null)
+    const [loading, setLoading] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
     const [error, setError] = useState('')
     const [customMessage, setCustomMessage] = useState('')
 
-    const handleRequest = async (type: ServiceRequestType) => {
-        setLoading(type)
+    const handlePreset = async (option: RequestOption) => {
+        setLoading(option.id)
         setError('')
 
         const res = await createServiceRequest(
             sessionId,
             restaurantId,
-            type,
-            type === 'other' ? customMessage : undefined
+            option.type,
+            option.message || undefined
         )
 
         setLoading(null)
@@ -46,7 +51,29 @@ export default function ServiceRequestPanel({
         if (res.error) {
             setError(res.error)
         } else {
-            setSuccess(type)
+            setSuccess(option.id)
+            setTimeout(() => setSuccess(null), 3000)
+        }
+    }
+
+    const handleCustom = async () => {
+        setLoading('custom')
+        setError('')
+
+        const res = await createServiceRequest(
+            sessionId,
+            restaurantId,
+            'other',
+            customMessage
+        )
+
+        setLoading(null)
+
+        if (res.error) {
+            setError(res.error)
+        } else {
+            setSuccess('custom')
+            setCustomMessage('')
             setTimeout(() => setSuccess(null), 3000)
         }
     }
@@ -75,25 +102,28 @@ export default function ServiceRequestPanel({
 
             {/* Options */}
             <div className="p-3 grid grid-cols-2 gap-2">
-                {REQUEST_OPTIONS.map(({ type, label, icon: Icon, color }) => (
-                    <button
-                        key={type}
-                        onClick={() => handleRequest(type)}
-                        disabled={loading !== null}
-                        className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                        <div className={`${color} text-white p-2 rounded-lg`}>
-                            {loading === type ? (
-                                <Loader2 size={18} className="animate-spin" />
-                            ) : success === type ? (
-                                <Check size={18} />
-                            ) : (
-                                <Icon size={18} />
-                            )}
-                        </div>
-                        <span className="text-xs font-medium text-gray-700">{label}</span>
-                    </button>
-                ))}
+                {REQUEST_OPTIONS.map((option) => {
+                    const Icon = option.icon
+                    return (
+                        <button
+                            key={option.id}
+                            onClick={() => handlePreset(option)}
+                            disabled={loading !== null}
+                            className="flex flex-col items-center gap-1.5 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 active:scale-95 transition-all disabled:opacity-50"
+                        >
+                            <div className={`${option.color} text-white p-2 rounded-lg`}>
+                                {loading === option.id ? (
+                                    <Loader2 size={18} className="animate-spin" />
+                                ) : success === option.id ? (
+                                    <Check size={18} />
+                                ) : (
+                                    <Icon size={18} />
+                                )}
+                            </div>
+                            <span className="text-xs font-medium text-gray-700">{option.label}</span>
+                        </button>
+                    )
+                })}
             </div>
 
             {/* Custom message for "other" */}
@@ -107,7 +137,7 @@ export default function ServiceRequestPanel({
                         className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
                     />
                     <button
-                        onClick={() => handleRequest('other')}
+                        onClick={handleCustom}
                         disabled={!customMessage.trim() || loading !== null}
                         className="bg-gray-800 text-white text-sm px-3 rounded-lg disabled:opacity-40"
                     >

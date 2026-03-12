@@ -53,6 +53,17 @@ async function seed() {
             feedbackEnabled: true,
             geofenceEnabled: false,
             geofenceRadiusMeters: 100
+        },
+        features_v2: {
+            takeoutEnabled: true,
+            loyaltyEnabled: false,
+            dynamicPricingEnabled: false,
+            ingredientTrackingEnabled: false,
+            staffShiftsEnabled: false,
+            splitBillingEnabled: false,
+            serviceRequestsEnabled: true,
+            nepalPayEnabled: true,
+            defaultTaxRate: 13
         }
     }, { onConflict: 'restaurant_id' });
     if (setError) console.error('Error seeding settings:', setError.message);
