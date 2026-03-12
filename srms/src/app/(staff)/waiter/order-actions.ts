@@ -3,25 +3,24 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-export async function verifyPayment(
-    claimId: string,
-    action: 'verified' | 'rejected',
-    userId: string
-): Promise<{ error?: string; success?: boolean }> {
-    const supabase = await createAdminClient()
+/**
+ * Waiter marks an order as delivered.
+ * Step 7 of the Golden Path: Waiter picks up ready food & delivers.
+ */
+export async function markOrderDelivered(orderId: string) {
+    const adminSupabase = await createAdminClient()
 
-    const { error } = await supabase
-        .from('payment_verifications')
+    const { error } = await adminSupabase
+        .from('orders')
         .update({
-            status: action,
-            verified_by: userId,
-            verified_at: new Date().toISOString(),
+            status: 'delivered',
+            delivered_at: new Date().toISOString(),
         })
-        .eq('id', claimId)
+        .eq('id', orderId)
 
     if (error) {
-        console.error('Payment verification update failed:', error)
-        return { error: 'Failed to update payment status' }
+        console.error('Failed to mark order delivered:', error)
+        return { error: error.message }
     }
 
     revalidatePath('/waiter')
@@ -29,8 +28,14 @@ export async function verifyPayment(
 }
 
 /**
- * Combined action: Verify payment claim → Mark order as paid → Close session.
- * Step 9 of Golden Path: "Verify Payment & Close Table"
+ * Combined action: Verify payment claim → Mark orders paid → Close session.
+ * Step 9 of the Golden Path: "Verify Payment & Close Table"
+ *
+ * Flow:
+ * 1. Verify the payment claim (status → 'verified')
+ * 2. Mark the associated order as paid
+ * 3. Check if ALL orders in the session are now paid
+ * 4. If all paid, close the session → table turns green (available)
  */
 export async function verifyPaymentAndCloseTable(
     claimId: string,
@@ -38,7 +43,7 @@ export async function verifyPaymentAndCloseTable(
 ): Promise<{ error?: string; success?: boolean; tableClosed?: boolean }> {
     const supabase = await createAdminClient()
 
-    // 1. Verify the payment claim and get associated order_id
+    // 1. Verify the payment claim and get order_id
     const { data: claim, error: claimError } = await supabase
         .from('payment_verifications')
         .update({
@@ -61,7 +66,7 @@ export async function verifyPaymentAndCloseTable(
         return { success: true, tableClosed: false }
     }
 
-    // 2. Mark the order as paid and get its session_id
+    // 2. Mark the associated order as paid
     const { data: order, error: orderError } = await supabase
         .from('orders')
         .update({
@@ -78,7 +83,7 @@ export async function verifyPaymentAndCloseTable(
         return { success: true, tableClosed: false }
     }
 
-    // 3. Check if ALL orders in this session are now paid
+    // 3. Check if ALL orders in this session are paid
     const { count: unpaidCount } = await supabase
         .from('orders')
         .select('id', { count: 'exact', head: true })
@@ -87,8 +92,8 @@ export async function verifyPaymentAndCloseTable(
         .neq('status', 'cancelled')
 
     if (unpaidCount === 0) {
-        // 4. All orders paid — close the session (table turns green)
-        await supabase
+        // 4. All orders paid — close the session
+        const { error: sessionError } = await supabase
             .from('sessions')
             .update({
                 status: 'closed',
@@ -96,6 +101,10 @@ export async function verifyPaymentAndCloseTable(
             })
             .eq('id', order.session_id)
             .eq('status', 'active')
+
+        if (sessionError) {
+            console.error('Failed to close session:', sessionError)
+        }
 
         revalidatePath('/waiter')
         return { success: true, tableClosed: true }

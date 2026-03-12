@@ -1,5 +1,5 @@
 import { getCurrentUser } from '@/lib/auth'
-import { createServerClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import OrderQueue from '@/components/kitchen/OrderQueue'
 import TakeoutQueue from '@/components/kitchen/TakeoutQueue'
 import { getRestaurantFeatures } from '@/lib/features'
@@ -8,12 +8,12 @@ export const revalidate = 0 // Never cache the kitchen page securely
 
 export default async function KitchenPage() {
     const { restaurantId } = await getCurrentUser()
-    const supabase = await createServerClient()
+    const adminSupabase = await createAdminClient()
 
     // Fetch feature flags, active orders + takeout orders in parallel
     const [features, { data: activeOrders }, { data: takeoutOrders }] = await Promise.all([
         getRestaurantFeatures(restaurantId),
-        supabase
+        adminSupabase
             .from('orders')
             .select(`
       id,
@@ -33,7 +33,7 @@ export default async function KitchenPage() {
             .eq('restaurant_id', restaurantId)
             .in('status', ['pending', 'confirmed', 'preparing'])
             .order('placed_at', { ascending: true }),
-        supabase
+        adminSupabase
             .from('takeout_orders')
             .select('*')
             .eq('restaurant_id', restaurantId)

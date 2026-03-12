@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { CheckCircle, XCircle, Clock, Smartphone, ImageIcon, Loader2 } from 'lucide-react'
-import { verifyPayment } from './payment-verification-actions'
+import { CheckCircle, XCircle, Clock, Smartphone, ImageIcon, Loader2, DoorClosed } from 'lucide-react'
+import { verifyPayment, verifyPaymentAndCloseTable } from './payment-verification-actions'
 import { timeAgo } from '@/lib/utils'
+import { toast } from 'react-hot-toast'
 
 interface PaymentClaim {
     id: string
@@ -83,6 +84,26 @@ export default function PaymentVerificationFeed({
         setLoading(null)
     }
 
+    const handleVerifyAndClose = async (claimId: string) => {
+        setLoading(claimId)
+        const res = await verifyPaymentAndCloseTable(claimId, userId)
+        if (res.error) {
+            toast.error(res.error)
+        } else {
+            setClaims((prev) =>
+                prev.map((c) =>
+                    c.id === claimId ? { ...c, status: 'verified' as const, verified_by: userId } : c
+                )
+            )
+            if (res.tableClosed) {
+                toast.success('Payment verified & table closed! \u2705')
+            } else {
+                toast.success('Payment verified. Other orders still unpaid.')
+            }
+        }
+        setLoading(null)
+    }
+
     const pendingClaims = claims.filter((c) => c.status === 'pending')
     const resolvedClaims = claims.filter((c) => c.status !== 'pending')
 
@@ -152,27 +173,44 @@ export default function PaymentVerificationFeed({
                     )}
 
                     {/* Action Buttons */}
-                    <div className="flex gap-2 pt-1">
-                        <button
-                            onClick={() => handleVerify(claim.id, 'verified')}
-                            disabled={loading === claim.id}
-                            className="flex-1 bg-green-600 text-white font-medium rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-sm active:scale-95 disabled:opacity-50"
-                        >
-                            {loading === claim.id ? (
-                                <Loader2 size={16} className="animate-spin" />
-                            ) : (
-                                <CheckCircle size={16} />
-                            )}
-                            Approve
-                        </button>
-                        <button
-                            onClick={() => handleVerify(claim.id, 'rejected')}
-                            disabled={loading === claim.id}
-                            className="flex-1 bg-red-50 text-red-600 border border-red-200 font-medium rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-sm active:scale-95 disabled:opacity-50"
-                        >
-                            <XCircle size={16} />
-                            Reject
-                        </button>
+                    <div className="flex flex-col gap-2 pt-1">
+                        {/* Primary action: Verify & Close Table (Step 9 of Golden Path) */}
+                        {claim.order_id && (
+                            <button
+                                onClick={() => handleVerifyAndClose(claim.id)}
+                                disabled={loading === claim.id}
+                                className="w-full bg-blue-600 text-white font-medium rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-sm active:scale-95 disabled:opacity-50"
+                            >
+                                {loading === claim.id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                    <DoorClosed size={16} />
+                                )}
+                                Verify Payment & Close Table
+                            </button>
+                        )}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => handleVerify(claim.id, 'verified')}
+                                disabled={loading === claim.id}
+                                className="flex-1 bg-green-600 text-white font-medium rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-sm active:scale-95 disabled:opacity-50"
+                            >
+                                {loading === claim.id ? (
+                                    <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                    <CheckCircle size={16} />
+                                )}
+                                Approve
+                            </button>
+                            <button
+                                onClick={() => handleVerify(claim.id, 'rejected')}
+                                disabled={loading === claim.id}
+                                className="flex-1 bg-red-50 text-red-600 border border-red-200 font-medium rounded-lg py-2.5 flex items-center justify-center gap-1.5 text-sm active:scale-95 disabled:opacity-50"
+                            >
+                                <XCircle size={16} />
+                                Reject
+                            </button>
+                        </div>
                     </div>
                 </div>
             ))}

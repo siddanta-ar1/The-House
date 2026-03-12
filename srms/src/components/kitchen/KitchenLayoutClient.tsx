@@ -2,8 +2,7 @@
 
 import { ReactNode } from 'react'
 import { LogOut } from 'lucide-react'
-
-import Image from 'next/image'
+import VideoLogo from '@/components/shared/VideoLogo'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -22,14 +21,7 @@ export default function KitchenLayoutClient({ children }: { children: ReactNode 
             {/* Top Navbar — responsive */}
             <header className="bg-[var(--color-secondary)] brightness-90 border-b border-white/10 px-3 md:px-6 py-2.5 md:py-3 shrink-0 flex items-center justify-between shadow-md">
                 <div className="flex items-center gap-2 md:gap-3">
-                    <Image
-                        src="/icons/kkhane.png"
-                        alt="KKhane"
-                        width={100}
-                        height={28}
-                        className="h-7 w-auto object-contain brightness-0 invert"
-                        priority
-                    />
+                    <VideoLogo className="h-7" variant="dark" />
                     <span className="text-xs text-gray-400 font-medium">KDS</span>
                 </div>
 

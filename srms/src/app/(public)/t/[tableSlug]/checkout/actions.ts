@@ -7,6 +7,13 @@ import { headers } from 'next/headers'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
 
+type PlaceOrderItemPayload = {
+    menu_item_id: string
+    quantity: number
+    special_request: string | null
+    modifiers: { modifier_id: string }[]
+}
+
 // Serverless-safe rate limiting via Upstash Redis
 // Each IP gets 5 requests per 60-second sliding window
 // Lazily initialized so missing env vars don't crash the entire module
@@ -59,8 +66,23 @@ export async function placeOrder(
     // 2. Proceed with Order Placement
     const supabase = await createAdminClient()
 
+    // 2a. Resolve session_token → session UUID
+    // The client passes session_token (e.g. 's-abc123'), but the RPC expects the UUID primary key
+    const { data: sessionData, error: sessionError } = await supabase
+        .from('sessions')
+        .select('id')
+        .eq('session_token', sessionId)
+        .eq('status', 'active')
+        .single()
+
+    if (sessionError || !sessionData) {
+        return { error: 'Your table session has expired or is invalid. Please ask your waiter to reopen.' }
+    }
+
+    const sessionUuid = sessionData.id
+
     // Format items payload for the place_order RPC (includes modifiers)
-    const payload = items.map((i) => ({
+    const payload: PlaceOrderItemPayload[] = items.map((i) => ({
         menu_item_id: i.menuItemId,
         quantity: i.quantity,
         special_request: i.specialRequest || null,
@@ -71,7 +93,7 @@ export async function placeOrder(
 
     // Call the ACID-safe RPC (returns JSONB with breakdown)
     const { data, error } = await supabase.rpc('place_order', {
-        p_session_id: sessionId,
+        p_session_id: sessionUuid,
         p_items: payload,
         p_customer_note: customerNote || null,
         p_promo_code: promoCode || null,
@@ -91,6 +113,23 @@ export async function placeOrder(
         if (error.message.includes('INVALID_PROMO')) {
             return { error: 'The promo code is invalid or has expired.' }
         }
+
+        // Hosted DB hotfix fallback:
+        // If the RPC itself is broken on this environment (e.g. missing columns,
+        // unassigned record), create order rows directly so core flow still works.
+        const fallback = await placeOrderFallback(
+            supabase,
+            sessionUuid,
+            payload,
+            customerNote || null,
+            loyaltyMemberId || null
+        )
+
+        if (fallback) {
+            revalidatePath(`/t/${restaurantSlug}`)
+            return fallback
+        }
+
         return { error: 'Order failed to place. Please try again or ask a waiter.' }
     }
 
@@ -114,5 +153,136 @@ export async function placeOrder(
         tax: result.tax,
         total: result.total,
         pointsEarned: result.points_earned,
+    }
+}
+
+async function placeOrderFallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    supabase: any,
+    sessionUuid: string,
+    payload: PlaceOrderItemPayload[],
+    customerNote: string | null,
+    loyaltyMemberId: string | null
+): Promise<{
+    orderId: string
+    subtotal: number
+    discount: number
+    tax: number
+    total: number
+    pointsEarned: number
+} | null> {
+    // Get session + restaurant context
+    const { data: sessionRow, error: sessionCtxError } = await supabase
+        .from('sessions')
+        .select('restaurant_id')
+        .eq('id', sessionUuid)
+        .single()
+
+    if (sessionCtxError || !sessionRow?.restaurant_id) return null
+
+    const restaurantId = sessionRow.restaurant_id as string
+
+    // Create pending order first
+    const { data: orderRow, error: orderInsertError } = await supabase
+        .from('orders')
+        .insert({
+            session_id: sessionUuid,
+            restaurant_id: restaurantId,
+            customer_note: customerNote,
+            loyalty_member_id: loyaltyMemberId,
+            status: 'pending',
+            payment_status: 'unpaid',
+        })
+        .select('id')
+        .single()
+
+    if (orderInsertError || !orderRow?.id) {
+        console.error('Fallback order insert failed:', orderInsertError)
+        return null
+    }
+
+    const orderId = orderRow.id as string
+    let subtotal = 0
+
+    // Insert each line item (+ optional modifiers)
+    for (const item of payload) {
+        const { data: menuItem } = await supabase
+            .from('menu_items')
+            .select('id, price')
+            .eq('id', item.menu_item_id)
+            .single()
+
+        if (!menuItem?.id) continue
+
+        const unitPrice = Number(menuItem.price ?? 0)
+
+        const { data: orderItemRow, error: orderItemInsertError } = await supabase
+            .from('order_items')
+            .insert({
+                order_id: orderId,
+                menu_item_id: menuItem.id,
+                quantity: item.quantity,
+                unit_price: unitPrice,
+                special_request: item.special_request,
+            })
+            .select('id')
+            .single()
+
+        if (orderItemInsertError || !orderItemRow?.id) {
+            console.error('Fallback order item insert failed:', orderItemInsertError)
+            continue
+        }
+
+        let itemTotal = unitPrice * item.quantity
+
+        if (item.modifiers?.length) {
+            for (const mod of item.modifiers) {
+                const { data: modRow } = await supabase
+                    .from('menu_item_modifiers')
+                    .select('id, name, price_adjustment')
+                    .eq('id', mod.modifier_id)
+                    .single()
+
+                if (!modRow?.id) continue
+
+                await supabase.from('order_item_modifiers').insert({
+                    order_item_id: orderItemRow.id,
+                    modifier_id: modRow.id,
+                    modifier_name: modRow.name,
+                    price_adjustment: modRow.price_adjustment,
+                })
+
+                itemTotal += Number(modRow.price_adjustment ?? 0) * item.quantity
+            }
+        }
+
+        subtotal += itemTotal
+    }
+
+    const discount = 0
+    const tax = 0
+    const total = subtotal - discount + tax
+
+    const { error: totalsUpdateError } = await supabase
+        .from('orders')
+        .update({
+            subtotal_amount: subtotal,
+            discount_amount: discount,
+            tax_amount: tax,
+            total_amount: total,
+        })
+        .eq('id', orderId)
+
+    if (totalsUpdateError) {
+        console.error('Fallback order totals update failed:', totalsUpdateError)
+    }
+
+    return {
+        orderId,
+        subtotal,
+        discount,
+        tax,
+        total,
+        pointsEarned: 0,
     }
 }

@@ -1,24 +1,35 @@
 'use server'
 
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 export async function openSession(tableId: string, restaurantId: string, guestCount?: number) {
     const supabase = await createServerClient()
+    const adminSupabase = await createAdminClient()
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return { error: 'Unauthorized' }
+    if (!user) {
+        console.error('[openSession] No authenticated user found')
+        return { error: 'Unauthorized' }
+    }
 
-    const { error } = await supabase
+    // Generate a URL-safe session token (avoids DB-level base64url encoding issues)
+    const { randomBytes } = await import('crypto')
+    const sessionToken = randomBytes(32).toString('base64url')
+
+    const { data, error } = await adminSupabase
         .from('sessions')
         .insert({
             table_id: tableId,
             restaurant_id: restaurantId,
             opened_by: user.id,
-            guest_count: guestCount || null
+            guest_count: guestCount || null,
+            session_token: sessionToken,
         })
+        .select()
 
     if (error) {
+        console.error('[openSession] Insert failed:', error)
         if (error.code === '23505') return { error: 'Table already has an active session' }
         return { error: error.message }
     }
@@ -28,9 +39,9 @@ export async function openSession(tableId: string, restaurantId: string, guestCo
 }
 
 export async function closeSession(sessionId: string) {
-    const supabase = await createServerClient()
+    const adminSupabase = await createAdminClient()
 
-    const { error } = await supabase
+    const { error } = await adminSupabase
         .from('sessions')
         .update({
             status: 'closed',

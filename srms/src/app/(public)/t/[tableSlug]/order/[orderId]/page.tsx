@@ -1,8 +1,10 @@
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import OrderTracker from '@/components/customer/OrderTracker'
 import InvoiceBanner from '@/components/customer/InvoiceBanner'
+import OrderPaymentSection from '@/components/customer/OrderPaymentSection'
 import Link from 'next/link'
+import { getRestaurantFeatures } from '@/lib/features'
 
 export const revalidate = 0 // Don't cache this page - fetch fresh DB state
 
@@ -10,10 +12,11 @@ export default async function OrderPage(props: {
     params: Promise<{ tableSlug: string; orderId: string }>
 }) {
     const params = await props.params;
-    const supabase = await createServerClient()
+    const adminSupabase = await createAdminClient()
 
     // Verify the order exists, fetch with nested item relations
-    const { data: order } = await supabase
+    // Using adminSupabase to bypass RLS (JWT custom claims hook not configured on hosted Supabase)
+    const { data: order } = await adminSupabase
         .from('orders')
         .select(`
       *,
@@ -29,17 +32,27 @@ export default async function OrderPage(props: {
         return notFound()
     }
 
-    // Fetch restaurant info for invoice display (PAN number, VAT status)
-    let restaurantInfo: { pan_number?: string; vat_registered?: boolean; name?: string } | null = null
-    if (order.restaurant_id) {
-        const adminSupabase = await createAdminClient()
-        const { data } = await adminSupabase
-            .from('restaurants')
-            .select('pan_number, vat_registered, name')
-            .eq('id', order.restaurant_id)
-            .single()
-        restaurantInfo = data
-    }
+    // Fetch restaurant info for invoice display + payment QR + features in parallel
+    const [restaurantResult, features] = await Promise.all([
+        order.restaurant_id
+            ? adminSupabase
+                .from('restaurants')
+                .select('pan_number, vat_registered, name, payment_qr_url, payment_qr_label')
+                .eq('id', order.restaurant_id)
+                .single()
+            : Promise.resolve({ data: null }),
+        order.restaurant_id
+            ? getRestaurantFeatures(order.restaurant_id)
+            : Promise.resolve(null),
+    ])
+
+    const restaurantInfo = restaurantResult?.data as {
+        pan_number?: string
+        vat_registered?: boolean
+        name?: string
+        payment_qr_url?: string
+        payment_qr_label?: string
+    } | null
 
     return (
         <div className="min-h-screen bg-gray-50 pb-12">
@@ -50,6 +63,18 @@ export default async function OrderPage(props: {
 
             <main className="max-w-xl mx-auto px-4 mt-6">
                 <OrderTracker orderId={params.orderId} initialOrder={order} />
+
+                {/* Pay Now Section — shown when Nepal pay is enabled and order isn't paid yet */}
+                {order.restaurant_id && features?.nepalPayEnabled && order.payment_status !== 'paid' && (
+                    <OrderPaymentSection
+                        orderId={params.orderId}
+                        restaurantId={order.restaurant_id}
+                        totalAmount={order.total_amount}
+                        paymentStatus={order.payment_status}
+                        paymentQrUrl={restaurantInfo?.payment_qr_url || null}
+                        paymentQrLabel={restaurantInfo?.payment_qr_label || null}
+                    />
+                )}
 
                 {/* Invoice / PAN display */}
                 {/* eslint-disable @typescript-eslint/no-explicit-any */}

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useActionState } from 'react'
 import { loginAction } from './actions'
-import Image from 'next/image'
+import VideoLogo from '@/components/shared/VideoLogo'
 import { Eye, EyeOff } from 'lucide-react'
 
 const initialState = { error: null as string | null }
@@ -15,14 +15,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
     return (
         <div className="w-full max-w-md bg-white rounded-2xl p-8 shadow-2xl mx-4">
             <div className="flex flex-col items-center mb-8">
-                <Image
-                    src="/icons/kkhane.png"
-                    alt="KKhane"
-                    width={140}
-                    height={40}
-                    className="h-10 w-auto object-contain mb-4"
-                    priority
-                />
+                <VideoLogo className="h-10 mb-4" />
                 <h1 className="text-2xl font-bold text-center text-gray-900">Staff Login</h1>
                 <p className="text-sm text-gray-500 text-center mt-2">
                     Sign in to access your dashboard

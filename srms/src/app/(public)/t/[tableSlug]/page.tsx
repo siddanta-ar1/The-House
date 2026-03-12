@@ -4,7 +4,7 @@ import MenuSection from '@/components/customer/MenuSection'
 import CartSummary from '@/components/customer/CartSummary'
 import ServiceRequestPanel from '@/components/customer/ServiceRequestPanel'
 import { getRestaurantFeatures } from '@/lib/features'
-import Image from 'next/image'
+import VideoLogo from '@/components/shared/VideoLogo'
 import type { MenuItem } from '@/types/database'
 
 export const revalidate = 60 // ISR: Revalidate at most every 60 seconds
@@ -33,40 +33,35 @@ export default async function CustomerMenuPage(props: {
     const restaurantId = tableData.restaurant_id
     const restaurantName = (tableData.restaurants as unknown as { name: string })?.name || 'Smart Restaurant'
 
-    // Auto-create session if none provided (customer just scanned the QR code)
+    // Find active session for this table (opened by waiter)
     if (!sessionToken) {
-        // Check for an existing active session on this table
         const { data: existingSession } = await supabase
             .from('sessions')
             .select('id, session_token')
             .eq('table_id', tableData.id)
             .eq('status', 'active')
+            .gt('expires_at', new Date().toISOString())
             .order('opened_at', { ascending: false })
             .limit(1)
             .maybeSingle()
 
         if (existingSession) {
             sessionToken = existingSession.session_token
-        } else {
-            // Create a new session for this table
-            const newToken = `s-${crypto.randomUUID().slice(0, 12)}`
-            const fourHoursFromNow = new Date()
-            fourHoursFromNow.setHours(fourHoursFromNow.getHours() + 4)
-            const { data: newSession } = await supabase
-                .from('sessions')
-                .insert({
-                    table_id: tableData.id,
-                    restaurant_id: restaurantId,
-                    session_token: newToken,
-                    status: 'active',
-                    expires_at: fourHoursFromNow.toISOString(),
-                })
-                .select('id, session_token')
-                .single()
+        }
+        // If no active session, customer sees menu in view-only mode
+        // They need to ask the waiter to open a session for their table
+    } else {
+        // Validate the provided session token is still active
+        const { data: validSession } = await supabase
+            .from('sessions')
+            .select('id, session_token')
+            .eq('session_token', sessionToken)
+            .eq('status', 'active')
+            .gt('expires_at', new Date().toISOString())
+            .maybeSingle()
 
-            if (newSession) {
-                sessionToken = newSession.session_token
-            }
+        if (!validSession) {
+            sessionToken = undefined // Session expired or invalid
         }
     }
 
@@ -118,20 +113,23 @@ export default async function CustomerMenuPage(props: {
                             )}
                         </p>
                     </div>
-                    <div className="h-12 w-auto">
-                        <Image
-                            src="/icons/kkhane.png"
-                            alt="KKhane"
-                            width={120}
-                            height={34}
-                            className="h-full w-auto object-contain"
-                            priority
-                        />
+                    <div className="h-10 w-auto shrink-0">
+                        <VideoLogo className="h-full" />
                     </div>
                 </div>
             </header>
 
             <main className="max-w-2xl mx-auto px-4 mt-6">
+                {/* No-session banner — ask waiter to open table */}
+                {!isValidSession && (
+                    <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+                        <p className="text-amber-800 font-semibold">👋 Welcome!</p>
+                        <p className="text-amber-700 text-sm mt-1">
+                            Please ask your waiter to open a session for this table so you can place orders.
+                        </p>
+                    </div>
+                )}
+
                 <MenuSection
                     categories={categories || []}
                     items={menuItems || []}

@@ -1,12 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { QrCode, Plus, Edit2, Trash2, Check, X, Loader2, Download, Smartphone } from 'lucide-react'
 import type { Table } from '@/types/database'
-import { QRCodeSVG } from 'qrcode.react'
+import { QRCodeCanvas } from 'qrcode.react'
 import { addTableAction, updateTableAction, deleteTableAction } from '@/app/(admin)/admin/tables/actions'
 import { toast } from 'react-hot-toast'
 import { useConfirmStore } from '@/lib/stores/confirm'
+
+// Brand colors for QR code customization
+const QR_FG_COLOR = '#1a1a2e'   // dark navy (matches --color-secondary)
+const QR_BG_COLOR = '#ffffff'
+const QR_LOGO_SRC = '/icons/kkhane.png'
+const QR_LOGO_SIZE = 28  // px — centered inside the QR
 
 export default function TableManager({
     initialTables,
@@ -25,7 +31,18 @@ export default function TableManager({
 
     // QR Preview State
     const [previewTable, setPreviewTable] = useState<Table | null>(null)
+    const [iframeLoaded, setIframeLoaded] = useState(false)
     const { confirm } = useConfirmStore()
+
+    const openPreview = useCallback((table: Table) => {
+        setIframeLoaded(false)
+        setPreviewTable(table)
+    }, [])
+
+    const closePreview = useCallback(() => {
+        setPreviewTable(null)
+        setIframeLoaded(false)
+    }, [])
 
     const openModal = (table?: Table) => {
         if (table) {
@@ -89,32 +106,47 @@ export default function TableManager({
         }
     }
 
+    const qrCanvasRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
     const downloadQR = (table: Table) => {
-        const svg = document.getElementById(`qr-${table.id}`)
-        if (!svg) return
-        const svgData = new XMLSerializer().serializeToString(svg)
-        const canvas = document.createElement("canvas")
-        const ctx = canvas.getContext("2d")
-        const img = new Image()
-        img.onload = () => {
-            canvas.width = img.width + 40
-            canvas.height = img.height + 80
-            if (ctx) {
-                ctx.fillStyle = "white"
-                ctx.fillRect(0, 0, canvas.width, canvas.height)
-                ctx.drawImage(img, 20, 20)
-                ctx.font = "bold 20px sans-serif"
-                ctx.fillStyle = "black"
-                ctx.textAlign = "center"
-                ctx.fillText(table.label, canvas.width / 2, canvas.height - 20)
-            }
-            const pngFile = canvas.toDataURL("image/png")
-            const downloadLink = document.createElement("a")
-            downloadLink.download = `${table.label.replace(/\s+/g, '_')}_QR.png`
-            downloadLink.href = `${pngFile}`
-            downloadLink.click()
-        }
-        img.src = "data:image/svg+xml;base64," + btoa(svgData)
+        const wrapperDiv = qrCanvasRefs.current.get(table.id)
+        const canvas = wrapperDiv?.querySelector('canvas') as HTMLCanvasElement | null
+        if (!canvas) return
+
+        // Create a larger canvas with label text below
+        const exportCanvas = document.createElement('canvas')
+        const scale = 3  // 3x for high-res print
+        const padding = 30 * scale
+        const labelHeight = 40 * scale
+        exportCanvas.width = canvas.width * scale + padding * 2
+        exportCanvas.height = canvas.height * scale + padding * 2 + labelHeight
+
+        const ctx = exportCanvas.getContext('2d')
+        if (!ctx) return
+
+        // White background
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height)
+
+        // Draw QR (scaled up)
+        ctx.drawImage(canvas, padding, padding, canvas.width * scale, canvas.height * scale)
+
+        // Draw table label
+        ctx.font = `bold ${20 * scale}px system-ui, -apple-system, sans-serif`
+        ctx.fillStyle = QR_FG_COLOR
+        ctx.textAlign = 'center'
+        ctx.fillText(table.label, exportCanvas.width / 2, exportCanvas.height - padding / 2)
+
+        // Subtitle: "Scan to order"
+        ctx.font = `${12 * scale}px system-ui, -apple-system, sans-serif`
+        ctx.fillStyle = '#6b7280'
+        ctx.fillText('Scan to order', exportCanvas.width / 2, exportCanvas.height - padding / 2 + 24 * scale)
+
+        const pngFile = exportCanvas.toDataURL('image/png')
+        const downloadLink = document.createElement('a')
+        downloadLink.download = `${table.label.replace(/\s+/g, '_')}_QR.png`
+        downloadLink.href = pngFile
+        downloadLink.click()
     }
 
     return (
@@ -152,18 +184,28 @@ export default function TableManager({
                                 </div>
 
                                 <div className="p-6 flex flex-col items-center justify-center flex-1">
-                                    <div className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mb-4">
-                                        <QRCodeSVG
-                                            id={`qr-${table.id}`}
+                                    <div
+                                        ref={el => { if (el) qrCanvasRefs.current.set(table.id, el) }}
+                                        className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm mb-4"
+                                    >
+                                        <QRCodeCanvas
                                             value={menuUrl}
                                             size={120}
                                             level="H"
                                             includeMargin={true}
+                                            fgColor={QR_FG_COLOR}
+                                            bgColor={QR_BG_COLOR}
+                                            imageSettings={{
+                                                src: QR_LOGO_SRC,
+                                                height: QR_LOGO_SIZE,
+                                                width: QR_LOGO_SIZE,
+                                                excavate: true,
+                                            }}
                                         />
                                     </div>
                                     <div className="flex gap-2 w-full">
                                         <button
-                                            onClick={() => setPreviewTable(table)}
+                                            onClick={() => openPreview(table)}
                                             className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                                         >
                                             <Smartphone size={14} /> Preview
@@ -245,33 +287,61 @@ export default function TableManager({
 
             {/* URL/Phone Preview Modal */}
             {previewTable && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={() => setPreviewTable(null)}>
-                    <div className="bg-white rounded-[2.5rem] p-4 shadow-2xl relative border-8 border-gray-900 w-[320px] h-[640px] flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-gray-900 rounded-b-xl z-20"></div>
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={closePreview}>
+                    {/* Close button — always visible, top-right of viewport */}
+                    <button
+                        onClick={closePreview}
+                        className="absolute top-3 right-3 sm:top-5 sm:right-5 z-[70] w-10 h-10 bg-white/15 hover:bg-white/25 rounded-full flex items-center justify-center text-white transition-colors"
+                        aria-label="Close preview"
+                    >
+                        <X size={20} />
+                    </button>
 
-                        <div className="flex-1 bg-gray-100 rounded-[1.5rem] overflow-hidden flex flex-col relative pt-8">
-                            {/* Browser Header Fake */}
-                            <div className="bg-gray-100 px-4 pb-2 pt-2 border-b border-gray-200 shrink-0 flex items-center gap-2">
-                                <div className="w-4 h-4 rounded text-gray-400"><Smartphone size={16} /></div>
-                                <div className="flex-1 bg-gray-200/80 rounded-lg text-[10px] text-center text-gray-500 py-1.5 px-2 truncate">
-                                    localhost:3000/t/{previewTable.qr_token.substring(0, 8)}...
+                    {/* Table label */}
+                    <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[70] text-white text-sm font-semibold bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-sm">
+                        {previewTable.label} — Customer View
+                    </div>
+
+                    {/* Phone frame — responsive sizing */}
+                    <div
+                        className="relative w-[280px] h-[560px] sm:w-[320px] sm:h-[640px] mt-10"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Phone bezel */}
+                        <div className="absolute inset-0 bg-gray-900 rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl border border-gray-700">
+                            {/* Notch */}
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-28 sm:w-32 h-5 sm:h-6 bg-gray-900 rounded-b-xl z-20" />
+                        </div>
+
+                        {/* Screen */}
+                        <div className="absolute inset-2 sm:inset-3 top-3 sm:top-4 rounded-[1.25rem] sm:rounded-[1.5rem] overflow-hidden bg-gray-100 flex flex-col">
+                            {/* Browser chrome */}
+                            <div className="bg-gray-100 px-3 sm:px-4 pb-1.5 sm:pb-2 pt-6 sm:pt-7 border-b border-gray-200 shrink-0 flex items-center gap-2">
+                                <div className="w-4 h-4 text-gray-400"><Smartphone size={14} /></div>
+                                <div className="flex-1 bg-gray-200/80 rounded-lg text-[9px] sm:text-[10px] text-center text-gray-500 py-1 sm:py-1.5 px-2 truncate font-mono">
+                                    {appUrl.replace(/https?:\/\//, '')}/t/{previewTable.qr_token.substring(0, 8)}…
                                 </div>
                             </div>
 
-                            {/* Iframe Loading the public menu page */}
+                            {/* Loading state */}
+                            {!iframeLoaded && (
+                                <div className="flex-1 flex flex-col items-center justify-center gap-3 bg-white">
+                                    <Loader2 size={24} className="animate-spin text-gray-400" />
+                                    <p className="text-xs text-gray-400">Loading menu…</p>
+                                </div>
+                            )}
+
+                            {/* Iframe — customer menu page */}
                             <iframe
                                 src={`/t/${previewTable.qr_token}`}
-                                className="w-full h-full border-none bg-white pointer-events-auto"
-                                title={`Simulated view for ${previewTable.label}`}
+                                className={`w-full flex-1 border-none bg-white ${iframeLoaded ? '' : 'sr-only'}`}
+                                title={`Customer menu preview for ${previewTable.label}`}
+                                onLoad={() => setIframeLoaded(true)}
                             />
                         </div>
 
-                        <button
-                            onClick={() => setPreviewTable(null)}
-                            className="absolute -right-12 -top-12 w-24 h-24 bg-white/10 hover:bg-white/20 rounded-full flex items-end justify-start p-4 text-white transition-colors"
-                        >
-                            <X size={24} className="-ml-1 -mb-1" />
-                        </button>
+                        {/* Home indicator bar */}
+                        <div className="absolute bottom-1.5 sm:bottom-2 left-1/2 -translate-x-1/2 w-24 sm:w-28 h-1 bg-gray-600 rounded-full" />
                     </div>
                 </div>
             )}

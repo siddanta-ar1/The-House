@@ -14,23 +14,54 @@ export type TableWithSession = Table & {
 }
 
 export default function TableManager({ initialTables, restaurantId, appUrl }: { initialTables: TableWithSession[], restaurantId: string, appUrl: string }) {
-    const [tables] = useState<TableWithSession[]>(initialTables)
+    const [tables, setTables] = useState<TableWithSession[]>(initialTables)
     const [selectedTable, setSelectedTable] = useState<TableWithSession | null>(null)
     const [isProcessing, setIsProcessing] = useState(false)
     const supabase = createClient()
     const { confirm } = useConfirmStore()
 
     useEffect(() => {
-        // Listen for session changes (opened/closed)
+        // Listen for session changes and update state reactively (no page reload)
         const channel = supabase
             .channel('waiter_sessions')
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'sessions', filter: `restaurant_id=eq.${restaurantId}` },
-                async () => {
-                    // Simplest approach: just refresh the page data on any session change 
-                    // (or we can mutate state locally, but refreshing is safer for MVP)
-                    window.location.reload()
+                { event: 'INSERT', schema: 'public', table: 'sessions', filter: `restaurant_id=eq.${restaurantId}` },
+                (payload) => {
+                    // New session opened — update the matching table
+                    const newSession = payload.new as Session
+                    setTables(prev => prev.map(t =>
+                        t.id === newSession.table_id
+                            ? { ...t, activeSession: newSession }
+                            : t
+                    ))
+                    // Update selected table if it's the one that changed
+                    setSelectedTable(prev =>
+                        prev?.id === newSession.table_id
+                            ? { ...prev, activeSession: newSession }
+                            : prev
+                    )
+                }
+            )
+            .on(
+                'postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'sessions', filter: `restaurant_id=eq.${restaurantId}` },
+                (payload) => {
+                    const updatedSession = payload.new as Session
+                    const isClosed = updatedSession.status === 'closed' || updatedSession.status === 'expired'
+
+                    setTables(prev => prev.map(t => {
+                        if (t.activeSession && t.activeSession.id === updatedSession.id) {
+                            return { ...t, activeSession: isClosed ? null : updatedSession }
+                        }
+                        return t
+                    }))
+                    setSelectedTable(prev => {
+                        if (prev?.activeSession?.id === updatedSession.id) {
+                            return { ...prev, activeSession: isClosed ? null : updatedSession }
+                        }
+                        return prev
+                    })
                 }
             )
             .subscribe()

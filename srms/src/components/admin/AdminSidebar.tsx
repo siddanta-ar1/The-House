@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { Users, UtensilsCrossed, Settings, LogOut, BarChart3, Palette, Grid3X3, Menu, X, TrendingUp, ShoppingBag, Tag, Heart, DollarSign, Package, FileText, Truck, Clock, Building } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
+import VideoLogo from '@/components/shared/VideoLogo'
 import { createClient } from '@/lib/supabase/client'
 
 export default function AdminSidebar({ userRole }: { userRole?: string }) {
@@ -33,14 +33,7 @@ export default function AdminSidebar({ userRole }: { userRole?: string }) {
         <>
             <div className="p-5 md:p-6 border-b border-gray-100 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                    <Image
-                        src="/icons/kkhane.png"
-                        alt="KKhane"
-                        width={120}
-                        height={34}
-                        className="h-8 w-auto object-contain"
-                        priority
-                    />
+                    <VideoLogo className="h-8" />
                 </div>
                 {/* Close button — mobile only */}
                 <button

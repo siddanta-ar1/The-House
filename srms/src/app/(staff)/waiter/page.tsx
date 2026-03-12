@@ -1,20 +1,21 @@
 import { getCurrentUser } from '@/lib/auth'
-import { createServerClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import TableManager, { type TableWithSession } from '@/components/waiter/TableManager'
 import ServiceRequestFeed from '@/components/waiter/ServiceRequestFeed'
 import StaffShiftClock from '@/components/shared/StaffShiftClock'
 import PaymentVerificationFeed from '@/components/waiter/PaymentVerificationFeed'
+import WaiterOrderFeed from '@/components/waiter/WaiterOrderFeed'
 import { getRestaurantFeatures } from '@/lib/features'
 
 export const revalidate = 0
 
 export default async function WaiterPage() {
     const { id: userId, restaurantId } = await getCurrentUser()
-    const supabase = await createServerClient()
     const adminSupabase = await createAdminClient()
 
     // Fetch all tables AND their active sessions (if any)
-    const { data: tables } = await supabase
+    // Using adminSupabase to bypass RLS — this page is already protected by proxy.ts
+    const { data: tables } = await adminSupabase
         .from('tables')
         .select(`
       *,
@@ -39,9 +40,9 @@ export default async function WaiterPage() {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 
     // Fetch feature flags + all parallel data
-    const [features, { data: serviceRequests }, { data: activeShift }, { data: shiftHistory }, { data: paymentClaims }] = await Promise.all([
+    const [features, { data: serviceRequests }, { data: activeShift }, { data: shiftHistory }, { data: paymentClaims }, { data: activeOrders }] = await Promise.all([
         getRestaurantFeatures(restaurantId),
-        supabase
+        adminSupabase
             .from('service_requests')
             .select('*, sessions(tables(label))')
             .eq('restaurant_id', restaurantId)
@@ -69,6 +70,16 @@ export default async function WaiterPage() {
             .eq('restaurant_id', restaurantId)
             .order('created_at', { ascending: false })
             .limit(20),
+        adminSupabase
+            .from('orders')
+            .select(`
+                id, status, total_amount, placed_at, customer_note, payment_status, session_id,
+                sessions ( id, tables ( label ) ),
+                order_items ( id, quantity, menu_items ( name ) )
+            `)
+            .eq('restaurant_id', restaurantId)
+            .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+            .order('placed_at', { ascending: true }),
     ])
 
     return (
@@ -92,6 +103,13 @@ export default async function WaiterPage() {
                     userId={userId}
                 />
             )}
+
+            {/* Active Order Feed — waiter sees ready orders here (Step 7) */}
+            <WaiterOrderFeed
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                initialOrders={(activeOrders || []) as any[]}
+                restaurantId={restaurantId}
+            />
 
             {/* Service Request Feed — gated */}
             {features?.serviceRequestsEnabled !== false && (

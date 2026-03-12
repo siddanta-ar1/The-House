@@ -6,6 +6,7 @@ import { playKitchenPing } from '@/lib/audio'
 import { timeAgo } from '@/lib/utils'
 import { Clock, ChefHat, CheckSquare } from 'lucide-react'
 import type { OrderStatus, Order, OrderItem, OrderItemModifier, MenuItem, Session, Table } from '@/types/database'
+import { updateOrderStatus } from '@/app/(staff)/kitchen/actions'
 
 type KitchenOrder = Order & {
     sessions?: Session & { tables?: Partial<Table> }
@@ -74,8 +75,8 @@ export default function OrderQueue({ initialOrders, restaurantId }: { initialOrd
         // Optimistic UI update
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o).filter(o => !['ready', 'delivered', 'cancelled'].includes(o.status)))
 
-        // DB update
-        await supabase.from('orders').update({ status: nextStatus }).eq('id', orderId)
+        // DB update via server action (bypasses RLS)
+        await updateOrderStatus(orderId, nextStatus)
     }
 
     // Group orders for the KDS layout

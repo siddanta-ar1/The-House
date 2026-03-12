@@ -10,6 +10,7 @@ interface NepalPaymentPanelProps {
     totalAmount: number
     qrUrl?: string | null
     provider?: string | null
+    orderId?: string | null
 }
 
 export default function NepalPaymentPanel({
@@ -17,6 +18,7 @@ export default function NepalPaymentPanel({
     totalAmount,
     qrUrl,
     provider,
+    orderId,
 }: NepalPaymentPanelProps) {
     const [phone, setPhone] = useState('')
     const [screenshot, setScreenshot] = useState<File | null>(null)
@@ -47,6 +49,9 @@ export default function NepalPaymentPanel({
         formData.append('amount', totalAmount.toString())
         formData.append('phone', phone)
         formData.append('provider', provider || 'esewa')
+        if (orderId) {
+            formData.append('orderId', orderId)
+        }
         if (screenshot) {
             formData.append('screenshot', screenshot)
         }

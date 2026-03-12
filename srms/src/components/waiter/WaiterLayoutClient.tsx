@@ -2,8 +2,7 @@
 
 import { ReactNode } from 'react'
 import { LogOut } from 'lucide-react'
-
-import Image from 'next/image'
+import VideoLogo from '@/components/shared/VideoLogo'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
@@ -22,14 +21,7 @@ export default function WaiterLayoutClient({ children }: { children: ReactNode }
             {/* Top Navbar — responsive */}
             <header className="bg-white border-b border-gray-200 px-3 md:px-6 py-2.5 md:py-3 shrink-0 flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2 md:gap-3">
-                    <Image
-                        src="/icons/kkhane.png"
-                        alt="KKhane"
-                        width={100}
-                        height={28}
-                        className="h-7 w-auto object-contain"
-                        priority
-                    />
+                    <VideoLogo className="h-7" />
                     <span className="text-xs text-gray-500 font-medium">Operations</span>
                 </div>
 

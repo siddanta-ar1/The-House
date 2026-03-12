@@ -9,6 +9,8 @@ export async function submitPaymentClaim(formData: FormData): Promise<{ error?: 
     const provider = formData.get('provider') as string
     const screenshot = formData.get('screenshot') as File | null
 
+    const orderId = formData.get('orderId') as string | null
+
     if (!restaurantId || !amount || !phone) {
         return { error: 'Missing required fields' }
     }
@@ -42,6 +44,7 @@ export async function submitPaymentClaim(formData: FormData): Promise<{ error?: 
         .from('payment_verifications')
         .insert({
             restaurant_id: restaurantId,
+            order_id: orderId || null,
             claimed_amount: amount,
             customer_phone: phone,
             provider,
