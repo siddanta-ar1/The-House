@@ -48,24 +48,27 @@ export async function clockOut(
 ): Promise<{ shift?: StaffShift; error?: string }> {
     const supabase = await createAdminClient()
 
-    // Call the RPC
-    const { data, error } = await supabase.rpc('staff_clock_out', {
+    // Call the RPC — returns NUMERIC (hours_worked), not a UUID
+    const { error } = await supabase.rpc('staff_clock_out', {
         p_user_id: userId,
     })
 
     if (error) {
         console.error('Clock out error:', error)
-        if (error.message.includes('NO_ACTIVE_SHIFT')) {
+        if (error.message.includes('NOT_CLOCKED_IN')) {
             return { error: 'No active shift found.' }
         }
         return { error: 'Failed to clock out. Please try again.' }
     }
 
-    // Fetch the updated shift
+    // Fetch the most recently closed shift for this user
     const { data: shift } = await supabase
         .from('staff_shifts')
         .select('*')
-        .eq('id', data)
+        .eq('user_id', userId)
+        .not('clock_out', 'is', null)
+        .order('clock_out', { ascending: false })
+        .limit(1)
         .single()
 
     return { shift: shift as StaffShift }
@@ -111,16 +114,16 @@ export async function getAllActiveShifts(
 
     const { data } = await supabase
         .from('staff_shifts')
-        .select('*, users(display_name)')
+        .select('*, users(full_name)')
         .eq('restaurant_id', restaurantId)
         .is('clock_out', null)
         .order('clock_in', { ascending: true })
 
     return (data || []).map((shift: unknown) => {
-        const s = shift as StaffShift & { users?: { display_name?: string } }
+        const s = shift as StaffShift & { users?: { full_name?: string } }
         return {
             ...s,
-            user_name: s.users?.display_name || 'Unknown',
+            user_name: s.users?.full_name || 'Unknown',
         }
     })
 }

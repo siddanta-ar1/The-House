@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Building2, ShoppingBag, Crown, Ban, CheckCircle, Loader2, ChevronDown } from 'lucide-react'
-import { suspendRestaurant, updateSubscriptionTier } from './actions'
+import { useRouter } from 'next/navigation'
+import { Building2, ShoppingBag, Crown, Ban, CheckCircle, Loader2, ChevronDown, Plus, X, Store, UserRound, Mail, KeyRound, Phone, MapPin, Check } from 'lucide-react'
+import { createTenantWithOwner, suspendRestaurant, updateSubscriptionTier, sendPasswordResetEmail, updateOwnerContact } from './actions'
 import { toast } from 'react-hot-toast'
 
 interface Restaurant {
@@ -41,6 +42,107 @@ export default function SuperAdminDashboard({
 }) {
     const [items, setItems] = useState(restaurants)
     const [loading, setLoading] = useState<string | null>(null)
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+    const [isCreatingTenant, setIsCreatingTenant] = useState(false)
+    const [manageOwnerModal, setManageOwnerModal] = useState<{
+        isOpen: boolean
+        restaurant: Restaurant | null
+        action: 'password' | 'contact'
+        email?: string
+        phone?: string
+    }>({
+        isOpen: false,
+        restaurant: null,
+        action: 'password',
+        email: undefined,
+        phone: undefined,
+    })
+    const [isUpdatingOwner, setIsUpdatingOwner] = useState(false)
+    const [createForm, setCreateForm] = useState({
+        restaurantName: '',
+        restaurantSlug: '',
+        ownerFullName: '',
+        ownerEmail: '',
+        ownerPassword: '',
+        contactPhone: '',
+        address: '',
+        subscriptionTier: 'free' as 'free' | 'basic' | 'pro' | 'enterprise',
+    })
+    const router = useRouter()
+
+    const handleCreateFormChange = (field: keyof typeof createForm, value: string) => {
+        setCreateForm(prev => {
+            if (field === 'restaurantName') {
+                const nextName = value
+                const previousGeneratedSlug = prev.restaurantName
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+                const generatedSlug = nextName
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, '')
+
+                return {
+                    ...prev,
+                    restaurantName: nextName,
+                    restaurantSlug: prev.restaurantSlug === '' || prev.restaurantSlug === previousGeneratedSlug
+                        ? generatedSlug
+                        : prev.restaurantSlug,
+                }
+            }
+
+            if (field === 'restaurantSlug') {
+                return {
+                    ...prev,
+                    restaurantSlug: value
+                        .toLowerCase()
+                        .replace(/[^a-z0-9-]+/g, '-')
+                        .replace(/--+/g, '-')
+                        .replace(/^-+|-+$/g, ''),
+                }
+            }
+
+            return { ...prev, [field]: value }
+        })
+    }
+
+    const resetCreateForm = () => {
+        setCreateForm({
+            restaurantName: '',
+            restaurantSlug: '',
+            ownerFullName: '',
+            ownerEmail: '',
+            ownerPassword: '',
+            contactPhone: '',
+            address: '',
+            subscriptionTier: 'free',
+        })
+    }
+
+    const handleCreateTenant = async () => {
+        if (!createForm.restaurantName || !createForm.ownerFullName || !createForm.ownerEmail || !createForm.ownerPassword) {
+            toast.error('Complete the required restaurant and owner fields')
+            return
+        }
+
+        setIsCreatingTenant(true)
+        const result = await createTenantWithOwner(createForm)
+        setIsCreatingTenant(false)
+
+        if (!result.success || !result.restaurant) {
+            toast.error(result.error || 'Failed to create client')
+            return
+        }
+
+        setItems(prev => [result.restaurant, ...prev])
+        resetCreateForm()
+        setIsCreateModalOpen(false)
+        toast.success('Client created with owner account and default settings')
+        router.refresh()
+    }
 
     const handleSuspend = async (id: string, suspend: boolean) => {
         setLoading(id)
@@ -76,6 +178,48 @@ export default function SuperAdminDashboard({
             toast.error(res.error || 'Failed')
         }
         setLoading(null)
+    }
+
+    const handleOwnerAction = async () => {
+        if (!manageOwnerModal.restaurant) return
+        const restaurant = manageOwnerModal.restaurant
+        const ownerEmail = (restaurant.users as any)?.email || ''
+
+        setIsUpdatingOwner(true)
+
+        if (manageOwnerModal.action === 'password') {
+            const result = await sendPasswordResetEmail(restaurant.id, ownerEmail)
+            if (result.success) {
+                toast.success(result.message || 'Password reset email sent')
+                setManageOwnerModal({ isOpen: false, restaurant: null, action: 'password' })
+            } else {
+                toast.error(result.error || 'Failed to send reset email')
+            }
+        } else if (manageOwnerModal.action === 'contact') {
+            const updates: Record<string, string | undefined> = {}
+            if (manageOwnerModal.email && manageOwnerModal.email !== ownerEmail) {
+                updates.email = manageOwnerModal.email
+            }
+            if (manageOwnerModal.phone) {
+                updates.phone = manageOwnerModal.phone
+            }
+
+            if (Object.keys(updates).length === 0) {
+                toast.error('No changes to save')
+                setIsUpdatingOwner(false)
+                return
+            }
+
+            const result = await updateOwnerContact(restaurant.id, updates as Parameters<typeof updateOwnerContact>[1])
+            if (result.success) {
+                toast.success('Owner contact information updated')
+                setManageOwnerModal({ isOpen: false, restaurant: null, action: 'password' })
+            } else {
+                toast.error(result.error || 'Failed to update contact')
+            }
+        }
+
+        setIsUpdatingOwner(false)
     }
 
     return (
@@ -122,9 +266,18 @@ export default function SuperAdminDashboard({
 
             {/* Restaurant List */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-                    <h3 className="text-lg font-semibold text-gray-800">All Restaurants</h3>
-                    <p className="text-sm text-gray-500 mt-1">Manage tenants, tiers, and suspension</p>
+                <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800">All Restaurants</h3>
+                        <p className="text-sm text-gray-500 mt-1">Manage tenants, tiers, and suspension</p>
+                    </div>
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+                    >
+                        <Plus size={16} />
+                        Add Client
+                    </button>
                 </div>
 
                 <div className="divide-y divide-gray-100">
@@ -156,6 +309,25 @@ export default function SuperAdminDashboard({
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
+                                {/* Manage Owner Button */}
+                                <button
+                                    onClick={() => {
+                                        const ownerEmail = (restaurant.users as any)?.email || ''
+                                        setManageOwnerModal({
+                                            isOpen: true,
+                                            restaurant,
+                                            action: 'password',
+                                            email: ownerEmail,
+                                            phone: '',
+                                        })
+                                    }}
+                                    disabled={loading === restaurant.id}
+                                    className="px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 disabled:opacity-50 transition"
+                                    title="Manage owner account"
+                                >
+                                    <UserRound size={14} />
+                                </button>
+
                                 {/* Tier Selector */}
                                 <div className="relative">
                                     <select
@@ -202,7 +374,280 @@ export default function SuperAdminDashboard({
                     </div>
                 )}
             </div>
+
+            {manageOwnerModal.isOpen && manageOwnerModal.restaurant && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+                        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                            <div>
+                                <h3 className="text-xl font-semibold text-gray-900">Manage Owner</h3>
+                                <p className="mt-1 text-sm text-gray-500">{manageOwnerModal.restaurant.name}</p>
+                            </div>
+                            <button
+                                onClick={() => setManageOwnerModal({ isOpen: false, restaurant: null, action: 'password' })}
+                                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                                aria-label="Close manage owner modal"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-6 px-6 py-6">
+                            <div className="flex gap-3 border-b border-gray-100 pb-4">
+                                <button
+                                    onClick={() => setManageOwnerModal(prev => ({ ...prev, action: 'password' }))}
+                                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
+                                        manageOwnerModal.action === 'password'
+                                            ? 'bg-primary text-white'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    Reset Password
+                                </button>
+                                <button
+                                    onClick={() => setManageOwnerModal(prev => ({ ...prev, action: 'contact' }))}
+                                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${
+                                        manageOwnerModal.action === 'contact'
+                                            ? 'bg-primary text-white'
+                                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    }`}
+                                >
+                                    Update Contact
+                                </button>
+                            </div>
+
+                            {manageOwnerModal.action === 'password' && (
+                                <div className="space-y-4">
+                                    <div className="rounded-2xl bg-blue-50 border border-blue-200 p-4">
+                                        <p className="text-sm text-blue-900">
+                                            A password reset email will be sent to <span className="font-semibold">{(manageOwnerModal.restaurant.users as any)?.email || 'owner'}</span>. They can use this link to set a new password.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={handleOwnerAction}
+                                        disabled={isUpdatingOwner}
+                                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+                                    >
+                                        {isUpdatingOwner ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />}
+                                        {isUpdatingOwner ? 'Sending...' : 'Send Reset Email'}
+                                    </button>
+                                </div>
+                            )}
+
+                            {manageOwnerModal.action === 'contact' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Owner Email</label>
+                                        <input
+                                            type="email"
+                                            value={manageOwnerModal.email || ''}
+                                            onChange={(e) => setManageOwnerModal(prev => ({ ...prev, email: e.target.value }))}
+                                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Phone Number</label>
+                                        <input
+                                            type="tel"
+                                            value={manageOwnerModal.phone || ''}
+                                            onChange={(e) => setManageOwnerModal(prev => ({ ...prev, phone: e.target.value }))}
+                                            placeholder="+977-98XXXXXXXX"
+                                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handleOwnerAction}
+                                        disabled={isUpdatingOwner}
+                                        className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60"
+                                    >
+                                        {isUpdatingOwner ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                                        {isUpdatingOwner ? 'Updating...' : 'Save Changes'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="border-t border-gray-100 bg-gray-50/70 px-6 py-4">
+                            <button
+                                onClick={() => setManageOwnerModal({ isOpen: false, restaurant: null, action: 'password' })}
+                                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isCreateModalOpen && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+                        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                            <div>
+                                <h3 className="text-xl font-semibold text-gray-900">Add Client</h3>
+                                <p className="mt-1 text-sm text-gray-500">Create a new restaurant tenant, provision the manager account, and seed the default settings in one flow.</p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (!isCreatingTenant) {
+                                        setIsCreateModalOpen(false)
+                                    }
+                                }}
+                                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                                aria-label="Close add client modal"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <div className="grid gap-6 px-6 py-6 md:grid-cols-2">
+                            <div className="space-y-4 rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                    <Store size={16} className="text-primary" />
+                                    Restaurant Profile
+                                </div>
+
+                                <Field label="Restaurant name *" icon={<Store size={16} />}>
+                                    <input
+                                        value={createForm.restaurantName}
+                                        onChange={(e) => handleCreateFormChange('restaurantName', e.target.value)}
+                                        placeholder="Hotel Himalaya"
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <Field label="Restaurant slug *" icon={<Store size={16} />}>
+                                    <input
+                                        value={createForm.restaurantSlug}
+                                        onChange={(e) => handleCreateFormChange('restaurantSlug', e.target.value)}
+                                        placeholder="hotel-himalaya"
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <Field label="Contact phone" icon={<Phone size={16} />}>
+                                    <input
+                                        value={createForm.contactPhone}
+                                        onChange={(e) => handleCreateFormChange('contactPhone', e.target.value)}
+                                        placeholder="+977-98XXXXXXXX"
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <Field label="Address" icon={<MapPin size={16} />}>
+                                    <textarea
+                                        value={createForm.address}
+                                        onChange={(e) => handleCreateFormChange('address', e.target.value)}
+                                        placeholder="Kathmandu, Nepal"
+                                        rows={3}
+                                        className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <Field label="Subscription tier" icon={<Crown size={16} />}>
+                                    <select
+                                        value={createForm.subscriptionTier}
+                                        onChange={(e) => handleCreateFormChange('subscriptionTier', e.target.value)}
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    >
+                                        <option value="free">Free</option>
+                                        <option value="basic">Basic</option>
+                                        <option value="pro">Pro</option>
+                                        <option value="enterprise">Enterprise</option>
+                                    </select>
+                                </Field>
+                            </div>
+
+                            <div className="space-y-4 rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                                    <UserRound size={16} className="text-primary" />
+                                    Owner Account
+                                </div>
+
+                                <Field label="Owner full name *" icon={<UserRound size={16} />}>
+                                    <input
+                                        value={createForm.ownerFullName}
+                                        onChange={(e) => handleCreateFormChange('ownerFullName', e.target.value)}
+                                        placeholder="Aarav Shrestha"
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <Field label="Owner email *" icon={<Mail size={16} />}>
+                                    <input
+                                        type="email"
+                                        value={createForm.ownerEmail}
+                                        onChange={(e) => handleCreateFormChange('ownerEmail', e.target.value)}
+                                        placeholder="owner@hotelhimalaya.com"
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <Field label="Temporary password *" icon={<KeyRound size={16} />}>
+                                    <input
+                                        type="password"
+                                        value={createForm.ownerPassword}
+                                        onChange={(e) => handleCreateFormChange('ownerPassword', e.target.value)}
+                                        placeholder="Minimum 8 characters"
+                                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </Field>
+
+                                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                                    This creates the auth account, links the owner as the manager, and seeds default theme, tax, currency, and feature flags.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col-reverse gap-3 border-t border-gray-100 bg-gray-50/70 px-6 py-4 md:flex-row md:items-center md:justify-between">
+                            <p className="text-xs text-gray-500">The new owner can sign in immediately with the email and temporary password above.</p>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={() => {
+                                        if (!isCreatingTenant) {
+                                            resetCreateForm()
+                                            setIsCreateModalOpen(false)
+                                        }
+                                    }}
+                                    className="rounded-xl border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+                                    disabled={isCreatingTenant}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateTenant}
+                                    disabled={isCreatingTenant}
+                                    className="inline-flex min-w-36 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {isCreatingTenant ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                                    {isCreatingTenant ? 'Creating...' : 'Create Client'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
+    )
+}
+
+function Field({
+    label,
+    icon,
+    children,
+}: {
+    label: string
+    icon: React.ReactNode
+    children: React.ReactNode
+}) {
+    return (
+        <label className="block space-y-1.5">
+            <span className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                <span className="text-gray-400">{icon}</span>
+                {label}
+            </span>
+            {children}
+        </label>
     )
 }
 

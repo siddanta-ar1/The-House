@@ -7,7 +7,7 @@ export async function getActiveShiftsAction(restaurantId: string) {
     const supabase = await createAdminClient()
     const { data } = await supabase
         .from('staff_shifts')
-        .select('*, users(full_name, email, role)')
+        .select('*, users(full_name, role_id, roles(name))')
         .eq('restaurant_id', restaurantId)
         .is('clock_out', null)
         .order('clock_in', { ascending: false })
@@ -18,7 +18,7 @@ export async function getRecentShiftsAction(restaurantId: string, limit = 50) {
     const supabase = await createAdminClient()
     const { data } = await supabase
         .from('staff_shifts')
-        .select('*, users(full_name, email, role)')
+        .select('*, users(full_name, role_id, roles(name))')
         .eq('restaurant_id', restaurantId)
         .not('clock_out', 'is', null)
         .order('clock_in', { ascending: false })

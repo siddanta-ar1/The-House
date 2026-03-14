@@ -1,0 +1,19 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build SRMS",
+			"type": "shell",
+			"command": "cd /home/mac/The-House/srms && npx next build",
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build SRMS",
+			"type": "shell",
+			"command": "cd /home/mac/The-House/srms && npx next build",
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

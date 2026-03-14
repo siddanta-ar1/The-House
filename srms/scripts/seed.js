@@ -59,7 +59,7 @@ async function seed() {
             loyaltyEnabled: true,
             dynamicPricingEnabled: false,
             ingredientTrackingEnabled: false,
-            staffShiftsEnabled: false,
+            staffShiftsEnabled: true,
             splitBillingEnabled: true,
             serviceRequestsEnabled: true,
             nepalPayEnabled: true,
