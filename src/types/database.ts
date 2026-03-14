@@ -32,6 +32,7 @@ export interface Restaurant {
     slug: string
     logo_url: string | null
     is_active: boolean
+    is_suspended: boolean
     created_at: string
     updated_at: string
     // Nepal business fields
@@ -49,6 +50,9 @@ export interface Restaurant {
     subscription_expires_at: string | null
     stripe_customer_id: string | null
     stripe_subscription_id: string | null
+    // Subscription limits
+    max_staff: number
+    max_menu_items: number
 }
 
 export interface User {
