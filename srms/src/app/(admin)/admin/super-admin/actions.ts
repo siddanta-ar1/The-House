@@ -3,6 +3,7 @@
 import { requireRole } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { validateInput, CreateTenantSchema } from '@/lib/validation'
 
 const TIER_LIMITS: Record<'free' | 'basic' | 'pro' | 'enterprise', { max_staff: number; max_menu_items: number }> = {
     free: { max_staff: 3, max_menu_items: 20 },
@@ -167,25 +168,22 @@ export async function updateSubscriptionTier(
 export async function createTenantWithOwner(input: CreateTenantInput) {
     await requireRole('super_admin')
 
-    const restaurantName = input.restaurantName.trim()
-    const ownerFullName = input.ownerFullName.trim()
-    const ownerEmail = input.ownerEmail.trim().toLowerCase()
-    const ownerPassword = input.ownerPassword.trim()
-    const restaurantSlug = normalizeSlug(input.restaurantSlug || input.restaurantName)
-    const contactPhone = input.contactPhone?.trim() || null
-    const address = input.address?.trim() || null
-    const subscriptionTier = input.subscriptionTier
+    // Validate input against schema
+    const validation = validateInput(CreateTenantSchema, input)
+    if (!validation.success) {
+        console.warn('Tenant creation validation failed:', validation.error)
+        return { error: `Invalid input: ${validation.error}` }
+    }
 
-    if (!restaurantName) return { error: 'Restaurant name is required.' }
-    if (!ownerFullName) return { error: 'Owner full name is required.' }
-    if (!ownerEmail) return { error: 'Owner email is required.' }
-    if (!restaurantSlug) return { error: 'Restaurant slug is required.' }
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(restaurantSlug)) {
-        return { error: 'Slug can only contain lowercase letters, numbers, and hyphens.' }
-    }
-    if (ownerPassword.length < 8) {
-        return { error: 'Owner password must be at least 8 characters.' }
-    }
+    const validatedInput = validation.data!
+    const restaurantName = validatedInput.restaurantName.trim()
+    const ownerFullName = validatedInput.ownerFullName.trim()
+    const ownerEmail = validatedInput.ownerEmail.trim().toLowerCase()
+    const ownerPassword = validatedInput.ownerPassword.trim()
+    const restaurantSlug = normalizeSlug(validatedInput.restaurantSlug || validatedInput.restaurantName)
+    const contactPhone = validatedInput.contactPhone?.trim() || null
+    const address = validatedInput.address?.trim() || null
+    const subscriptionTier: 'free' | 'basic' | 'pro' | 'enterprise' = validatedInput.subscriptionTier || 'free'
 
     const supabase = await createAdminClient()
     const limits = TIER_LIMITS[subscriptionTier]

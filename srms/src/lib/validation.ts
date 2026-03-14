@@ -1,0 +1,276 @@
+/**
+ * Runtime Input Validation Schemas
+ * ─────────────────────────────────────────────────────────────
+ * Centralized zod schemas for all API routes and server actions.
+ * Prevents malicious users from manipulating orders, payments, etc.
+ */
+
+import { z } from 'zod'
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// UUID & Common Types
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const UUID = z.string().uuid('Invalid UUID format')
+const EMAIL = z.string().email('Invalid email address').max(255)
+const PHONE = z.string().regex(/^\+?[\d\s\-()]{7,}$/, 'Invalid phone format')
+const POSITIVE_INT = z.number().int().positive('Must be a positive integer')
+const POSITIVE_DECIMAL = z.number().positive('Must be a positive number')
+const URL_STRING = z.string().url('Invalid URL').max(2048)
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ORDERS & CHECKOUT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const OrderItemSchema = z.object({
+  menu_item_id: UUID,
+  quantity: z.number().int().min(1).max(1000, 'Quantity cannot exceed 1000'),
+  special_request: z.string().max(500, 'Special request too long').nullable().optional(),
+  modifiers: z.array(z.object({
+    modifier_id: UUID
+  })).optional().default([])
+})
+
+export const PlaceOrderSchema = z.object({
+  sessionId: z.string().min(1, 'Session ID required'),
+  restaurantSlug: z.string().min(1).max(100),
+  items: z.array(OrderItemSchema).min(1, 'At least one item required'),
+  customerNote: z.string().max(500, 'Note too long').nullable().optional(),
+  promoCode: z.string().max(50).nullable().optional(),
+  loyaltyMemberId: UUID.nullable().optional()
+})
+
+export const OrderQuerySchema = z.object({
+  restaurant_id: UUID,
+  status: z.enum(['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'] as const).optional(),
+  limit: z.number().int().min(1).max(100).default(50)
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PAYMENTS (Nepal Pay: eSewa, Khalti, Fonepay)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const NepalPaymentSchema = z.object({
+  restaurantId: UUID,
+  orderId: UUID.optional(),
+  amount: POSITIVE_DECIMAL.max(999999, 'Amount too large'),
+  phone: PHONE,
+  provider: z.enum(['esewa', 'khalti', 'fonepay']),
+  screenshot: z.instanceof(File)
+    .refine(f => f.size <= 10 * 1024 * 1024, 'Screenshot must be under 10MB')
+    .refine(f => ['image/jpeg', 'image/png', 'image/webp'].includes(f.type), 'Screenshot must be JPEG, PNG, or WebP')
+    .optional()
+})
+
+export const StripePaymentSchema = z.object({
+  restaurantId: UUID,
+  orderId: UUID.optional(),
+  amount: POSITIVE_INT.max(999999900, 'Amount too large'), // Stripe uses cents
+  currency: z.string().length(3).toUpperCase().default('USD'),
+  paymentMethodId: z.string().startsWith('pm_', 'Invalid payment method ID')
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// LOYALTY PROGRAM
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const LoyaltyMemberSchema = z.object({
+  restaurant_id: UUID,
+  phone: PHONE,
+  email: EMAIL.optional(),
+  full_name: z.string().min(2).max(255, 'Name too long'),
+  tier: z.enum(['bronze', 'silver', 'gold', 'platinum']).default('bronze')
+})
+
+export const RedeemPointsSchema = z.object({
+  loyaltyMemberId: UUID,
+  pointsToRedeem: POSITIVE_INT.min(1),
+  restaurantId: UUID
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// MENU MANAGEMENT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const MenuItemSchema = z.object({
+  restaurant_id: UUID,
+  category_id: UUID,
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
+  price: POSITIVE_DECIMAL.max(999999),
+  preparation_min: POSITIVE_INT.max(300).optional(),
+  preparation_max: POSITIVE_INT.max(300).optional(),
+  is_available: z.boolean().default(true),
+  image_url: URL_STRING.optional(),
+  allergens: z.array(z.string()).default([]),
+  tags: z.array(z.string()).default([])
+})
+
+export const CreateCategorySchema = z.object({
+  restaurant_id: UUID,
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  display_order: POSITIVE_INT.optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STAFF MANAGEMENT
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const CreateStaffSchema = z.object({
+  restaurant_id: UUID,
+  email: EMAIL,
+  full_name: z.string().min(2).max(255),
+  role_id: z.number().int().min(1).max(10, 'Invalid role'),
+  phone: PHONE.optional(),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(128)
+})
+
+export const UpdateStaffSchema = z.object({
+  restaurant_id: UUID,
+  user_id: UUID,
+  full_name: z.string().min(2).max(255).optional(),
+  role_id: z.number().int().min(1).max(10).optional(),
+  is_active: z.boolean().optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// PROMO CODES
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const PromoCodeSchema = z.object({
+  restaurant_id: UUID,
+  code: z.string().min(3).max(50).toUpperCase(),
+  description: z.string().max(500).optional(),
+  discount_percentage: z.number().min(0).max(100).optional(),
+  discount_amount: POSITIVE_DECIMAL.optional(),
+  min_order_value: POSITIVE_DECIMAL.default(0),
+  max_uses: POSITIVE_INT.optional(),
+  valid_from: z.coerce.date().optional(),
+  valid_until: z.coerce.date().optional(),
+  is_active: z.boolean().default(true)
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TABLES & SESSIONS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const CreateTableSchema = z.object({
+  restaurant_id: UUID,
+  number: POSITIVE_INT.max(9999),
+  capacity: POSITIVE_INT.min(1).max(50),
+  description: z.string().max(200).optional(),
+  is_active: z.boolean().default(true)
+})
+
+export const CreateSessionSchema = z.object({
+  restaurant_id: UUID,
+  table_id: UUID,
+  guest_count: POSITIVE_INT.min(1).max(50).optional(),
+  notes: z.string().max(500).optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TENANT MANAGEMENT (SaaS)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const CreateTenantSchema = z.object({
+  restaurantName: z.string().min(2).max(255),
+  restaurantSlug: z.string().min(2).max(100)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug must be lowercase alphanumeric with hyphens'),
+  ownerFullName: z.string().min(2).max(255),
+  ownerEmail: EMAIL,
+  ownerPassword: z.string().min(8, 'Password must be 8+ characters').max(128),
+  contactPhone: PHONE.optional(),
+  address: z.string().max(500).optional(),
+  subscriptionTier: z.enum(['free', 'basic', 'pro', 'enterprise']).default('free')
+})
+
+export const UpdateTenantSchema = z.object({
+  restaurant_id: UUID,
+  subscription_tier: z.enum(['free', 'basic', 'pro', 'enterprise']).optional(),
+  subscription_status: z.enum(['active', 'past_due', 'suspended', 'cancelled']).optional(),
+  custom_domain: z.string().max(255).optional()
+})
+
+export const UpdateOwnerContactSchema = z.object({
+  userId: UUID,
+  email: EMAIL.optional(),
+  phone: PHONE.optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// LOGIN & AUTH
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const LoginSchema = z.object({
+  email: EMAIL,
+  password: z.string().min(1, 'Password required')
+})
+
+export const SignupSchema = z.object({
+  email: EMAIL,
+  password: z.string().min(8, 'Password must be 8+ characters'),
+  fullName: z.string().min(2).max(255)
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SETTINGS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const UpdateSettingsSchema = z.object({
+  restaurant_id: UUID,
+  theme: z.object({
+    primaryColor: z.string().regex(/^#[0-9A-F]{6}$/i, 'Invalid hex color'),
+    secondaryColor: z.string().regex(/^#[0-9A-F]{6}$/i),
+    fontFamily: z.string().max(50)
+  }).optional(),
+  features_v2: z.record(z.string(), z.boolean()).optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SERVICE REQUESTS (Waiter Call)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const CreateServiceRequestSchema = z.object({
+  session_id: z.string().min(1),
+  restaurant_id: UUID,
+  type: z.enum(['waiter', 'check', 'cleanup', 'support']),
+  priority: z.enum(['low', 'medium', 'high']).default('medium'),
+  notes: z.string().max(500).optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// QUERY PARAMETERS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export const PaginationSchema = z.object({
+  page: POSITIVE_INT.default(1),
+  limit: z.number().int().min(1).max(100).default(20)
+})
+
+export const SearchSchema = z.object({
+  q: z.string().max(255).optional(),
+  restaurant_id: UUID.optional()
+})
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// UTILITY: Safe Parse with Error Messages
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): { 
+  success: boolean
+  data?: T
+  error?: string
+} {
+  try {
+    const validated = schema.parse(data)
+    return { success: true, data: validated }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      const messages = error.issues.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
+      return { success: false, error: messages }
+    }
+    return { success: false, error: 'Validation failed' }
+  }
+}

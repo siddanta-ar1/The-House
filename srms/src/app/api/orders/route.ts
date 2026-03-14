@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
+import { validateInput, OrderQuerySchema } from '@/lib/validation'
 
 // Standard mock orders API for potential external POS integrations
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
-    const restaurantId = searchParams.get('restaurant_id')
-    const status = searchParams.get('status')
 
     // Require API Key in header for external access
     const authHeader = request.headers.get('authorization')
@@ -13,9 +12,19 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!restaurantId) {
-        return NextResponse.json({ error: 'Missing restaurant_id' }, { status: 400 })
+    // Validate query parameters
+    const params = {
+        restaurant_id: searchParams.get('restaurant_id'),
+        status: searchParams.get('status'),
+        limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50
     }
+
+    const validation = validateInput(OrderQuerySchema, params)
+    if (!validation.success) {
+        return NextResponse.json({ error: validation.error }, { status: 400 })
+    }
+
+    const { restaurant_id: restaurantId, status } = validation.data!
 
     const supabase = await createAdminClient()
 

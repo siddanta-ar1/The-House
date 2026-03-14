@@ -6,6 +6,8 @@ import { CartItem } from '@/types/database'
 import { headers } from 'next/headers'
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { validateInput, OrderItemSchema } from '@/lib/validation'
+import { z } from 'zod'
 
 type PlaceOrderItemPayload = {
     menu_item_id: string
@@ -50,6 +52,30 @@ export async function placeOrder(
     pointsEarned?: number
     error?: string
 }> {
+    // Validate all inputs before processing
+    const PlaceOrderInputSchema = z.object({
+        sessionId: z.string().min(1, 'Session ID required'),
+        restaurantSlug: z.string().min(1).max(100),
+        items: z.array(OrderItemSchema).min(1, 'At least one item required'),
+        customerNote: z.string().max(500).nullable().optional(),
+        promoCode: z.string().max(50).nullable().optional(),
+        loyaltyMemberId: z.string().uuid().nullable().optional()
+    })
+
+    const validation = validateInput(PlaceOrderInputSchema, {
+        sessionId,
+        restaurantSlug,
+        items,
+        customerNote,
+        promoCode,
+        loyaltyMemberId
+    })
+
+    if (!validation.success) {
+        console.warn('Place order validation failed:', validation.error)
+        return { error: `Invalid request: ${validation.error}` }
+    }
+
     // 1. Anti-Spam Rate Limiting via Upstash Redis (serverless-safe)
     const headersList = await headers()
     const ip = headersList.get('x-forwarded-for') || 'fallback-ip'
