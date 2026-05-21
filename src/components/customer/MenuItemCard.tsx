@@ -7,6 +7,7 @@ import { formatCurrency } from '@/lib/utils'
 import { Plus, Minus, X, Check } from 'lucide-react'
 import Image from 'next/image'
 import type { MenuItem, CartItemModifier } from '@/types/database'
+import { useTranslation } from '@/lib/contexts/TranslationContext'
 
 export default function MenuItemCard({ item, sessionId, restaurantSlug, restaurantId }: {
     item: MenuItem,
@@ -14,6 +15,10 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
     restaurantSlug: string,
     restaurantId?: string
 }) {
+    const { t } = useTranslation()
+    const displayName = t('menu_item_name', item.id, item.name)
+    const displayDesc = item.description ? t('menu_item_description', item.id, item.description) : null
+
     const items = useHydratedStore(useCartStore, (s) => s.items)
     const addItem = useCartStore((s) => s.addItem)
     const removeItem = useCartStore((s) => s.removeItem)
@@ -123,7 +128,7 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
                 {item.image_url ? (
                     <Image
                         src={item.image_url}
-                        alt={item.name}
+                        alt={displayName}
                         fill
                         className="object-cover"
                         sizes="(max-width: 768px) 100vw, 50vw"
@@ -147,15 +152,15 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
             {/* Content Body */}
             <div className="p-4 flex flex-col flex-1">
                 <div className="flex justify-between items-start gap-2 mb-2">
-                    <h3 className="font-bold text-lg text-gray-900 leading-tight">{item.name}</h3>
+                    <h3 className="font-bold text-lg text-gray-900 leading-tight">{displayName}</h3>
                     <div className="font-bold text-[var(--color-primary)] shrink-0">
                         {formatCurrency(item.price)}
                     </div>
                 </div>
 
-                {item.description && (
+                {displayDesc && (
                     <p className="text-gray-500 text-sm line-clamp-2 leading-relaxed flex-1 mb-4">
-                        {item.description}
+                        {displayDesc}
                     </p>
                 )}
 
@@ -199,7 +204,7 @@ export default function MenuItemCard({ item, sessionId, restaurantSlug, restaura
                 <div className="bg-white w-full sm:max-w-md sm:rounded-xl rounded-t-xl max-h-[85vh] flex flex-col">
                     <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                         <div>
-                            <h3 className="font-bold text-gray-900">{item.name}</h3>
+                            <h3 className="font-bold text-gray-900">{displayName}</h3>
                             <p className="text-sm text-gray-500">Customize your order</p>
                         </div>
                         <button onClick={() => setShowModifiers(false)}

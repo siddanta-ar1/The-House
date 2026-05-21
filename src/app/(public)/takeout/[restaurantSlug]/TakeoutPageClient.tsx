@@ -7,6 +7,8 @@ import TakeoutForm from '@/components/customer/TakeoutForm'
 import { useCartStore } from '@/lib/stores/cart'
 import { Plus, Minus, ShoppingBag } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { TranslationProvider, useTranslation } from '@/lib/contexts/TranslationContext'
+import LanguageSwitcher from '@/components/customer/LanguageSwitcher'
 
 interface MenuItem {
     id: string; name: string; description: string | null; price: number
@@ -14,12 +16,28 @@ interface MenuItem {
 }
 interface Category { id: string; name: string; sort_order: number }
 interface Restaurant { id: string; name: string; slug: string; description: string | null; logo_url: string | null }
+interface TranslationRow { language_code: string; entity_type: string; entity_id: string; translated_text: string }
 
-export default function TakeoutPageClient({ restaurant, categories, menuItems }: {
+interface Props {
     restaurant: Restaurant
     categories: Category[]
     menuItems: MenuItem[]
+    translations: TranslationRow[]
+    supportedLanguages: { code: string; name: string }[]
+}
+
+export default function TakeoutPageClient({ restaurant, categories, menuItems, translations, supportedLanguages }: Props) {
+    return (
+        <TranslationProvider translations={translations} supportedLanguages={supportedLanguages} restaurantId={restaurant.id}>
+            <TakeoutMenu restaurant={restaurant} categories={categories} menuItems={menuItems} />
+        </TranslationProvider>
+    )
+}
+
+function TakeoutMenu({ restaurant, categories, menuItems }: {
+    restaurant: Restaurant; categories: Category[]; menuItems: MenuItem[]
 }) {
+    const { t } = useTranslation()
     const [activeCategory, setActiveCategory] = useState(categories[0]?.id || '')
     const [showCheckout, setShowCheckout] = useState(false)
     const addItem = useCartStore(s => s.addItem)
@@ -57,6 +75,7 @@ export default function TakeoutPageClient({ restaurant, categories, menuItems }:
                         <h1 className="font-bold text-gray-900">{restaurant.name}</h1>
                         <p className="text-xs text-gray-500">Takeout Order</p>
                     </div>
+                    <LanguageSwitcher />
                     {items.length > 0 && (
                         <button onClick={() => setShowCheckout(true)}
                             className="flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium">
@@ -77,7 +96,7 @@ export default function TakeoutPageClient({ restaurant, categories, menuItems }:
                             className={`px-4 py-2 rounded-full text-sm whitespace-nowrap font-medium transition ${activeCategory === c.id
                                 ? 'bg-gray-900 text-white'
                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                            {c.name}
+                            {t('category_name', c.id, c.name)}
                         </button>
                     ))}
                 </div>
@@ -88,16 +107,18 @@ export default function TakeoutPageClient({ restaurant, categories, menuItems }:
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {filteredItems.map(item => {
                         const qty = getQty(item.id)
+                        const displayName = t('menu_item_name', item.id, item.name)
+                        const displayDesc = item.description ? t('menu_item_description', item.id, item.description) : null
                         return (
                             <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-4 flex gap-4">
                                 {item.image_url && (
-                                    <Image src={item.image_url} alt={item.name} width={80} height={80}
+                                    <Image src={item.image_url} alt={displayName} width={80} height={80}
                                         className="w-20 h-20 rounded-lg object-cover flex-shrink-0" />
                                 )}
                                 <div className="flex-1 min-w-0">
-                                    <h3 className="font-semibold text-gray-900 text-sm">{item.name}</h3>
-                                    {item.description && (
-                                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{item.description}</p>
+                                    <h3 className="font-semibold text-gray-900 text-sm">{displayName}</h3>
+                                    {displayDesc && (
+                                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{displayDesc}</p>
                                     )}
                                     <div className="flex items-center justify-between mt-2">
                                         <span className="font-semibold text-gray-900">{formatCurrency(item.price)}</span>

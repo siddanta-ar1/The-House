@@ -7,6 +7,8 @@ import MenuSection from '@/components/customer/MenuSection'
 import CartSummary from '@/components/customer/CartSummary'
 import ServiceRequestPanel from '@/components/customer/ServiceRequestPanel'
 import VideoLogo from '@/components/shared/VideoLogo'
+import { TranslationProvider } from '@/lib/contexts/TranslationContext'
+import LanguageSwitcher from '@/components/customer/LanguageSwitcher'
 
 interface TablePageClientProps {
     tableData: {
@@ -22,6 +24,9 @@ interface TablePageClientProps {
     sessionUUID: string | undefined
     isValidSession: boolean
     serviceRequestsEnabled: boolean
+    multiLanguageEnabled: boolean
+    translations: { language_code: string; entity_type: string; entity_id: string; translated_text: string }[]
+    supportedLanguages: { code: string; name: string }[]
 }
 
 export default function TablePageClient({
@@ -32,6 +37,9 @@ export default function TablePageClient({
     sessionUUID,
     isValidSession,
     serviceRequestsEnabled,
+    multiLanguageEnabled,
+    translations,
+    supportedLanguages,
 }: TablePageClientProps) {
     const [showMenu, setShowMenu] = useState(!isValidSession) // Show menu immediately if no session, otherwise start with homepage
 
@@ -53,8 +61,11 @@ export default function TablePageClient({
                             )}
                         </p>
                     </div>
-                    <div className="h-10 w-auto shrink-0">
-                        <VideoLogo className="h-full" />
+                    <div className="flex items-center gap-3 shrink-0">
+                        {multiLanguageEnabled && <LanguageSwitcher />}
+                        <div className="h-10 w-auto">
+                            <VideoLogo className="h-full" />
+                        </div>
                     </div>
                 </div>
             </header>
@@ -93,11 +104,17 @@ export default function TablePageClient({
     )
 
     return (
-        <HomepageGate
+        <TranslationProvider
+            translations={translations}
+            supportedLanguages={supportedLanguages}
             restaurantId={tableData.restaurant_id}
-            onProceed={() => setShowMenu(true)}
         >
-            {showMenu && menuContent}
-        </HomepageGate>
+            <HomepageGate
+                restaurantId={tableData.restaurant_id}
+                onProceed={() => setShowMenu(true)}
+            >
+                {showMenu && menuContent}
+            </HomepageGate>
+        </TranslationProvider>
     )
 }

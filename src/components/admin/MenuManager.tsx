@@ -1,15 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, Edit2, Trash2, GripVertical, Check, X, Tag, Loader2, Image as ImageIcon } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Edit2, Trash2, GripVertical, Check, X, Tag, Loader2, Image as ImageIcon, Globe } from 'lucide-react'
 import type { MenuCategory, MenuItem } from '@/types/database'
 import {
     addCategoryAction, updateCategoryAction, deleteCategoryAction,
     addItemAction, updateItemAction, deleteItemAction
 } from '@/app/(admin)/admin/menu/actions'
+import { getRestaurantTranslationConfig } from '@/app/(admin)/admin/menu/translation-actions'
 import { formatCurrency } from '@/lib/utils'
 import { toast } from 'react-hot-toast'
 import { useConfirmStore } from '@/lib/stores/confirm'
+import TranslationModal from '@/components/admin/TranslationModal'
+
+type TranslationRow = { language_code: string; entity_type: string; entity_id: string; translated_text: string }
 
 export default function MenuManager({
     initialCategories,
@@ -40,6 +44,20 @@ export default function MenuManager({
     })
 
     const [isSubmitting, setIsSubmitting] = useState(false)
+
+    // Translation modal state
+    const [translations, setTranslations] = useState<TranslationRow[]>([])
+    const [hasNepali, setHasNepali] = useState(false)
+    const [translateTarget, setTranslateTarget] = useState<{
+        entityId: string; entityType: 'menu_item' | 'category'; name: string; description?: string | null
+    } | null>(null)
+
+    useEffect(() => {
+        getRestaurantTranslationConfig().then(({ translations: t, languages: l }) => {
+            setTranslations(t)
+            setHasNepali(l.some(lang => lang.language_code === 'ne'))
+        })
+    }, [])
 
     // --- Category Handlers ---
     const openCategoryModal = (cat?: MenuCategory) => {
@@ -215,6 +233,11 @@ export default function MenuManager({
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
+                                        {hasNepali && (
+                                            <button onClick={() => setTranslateTarget({ entityId: cat.id, entityType: 'category', name: cat.name })} className="p-2 text-gray-400 hover:text-purple-500 rounded-lg hover:bg-purple-50" title="Translate">
+                                                <Globe size={16} />
+                                            </button>
+                                        )}
                                         <button onClick={() => openCategoryModal(cat)} className="p-2 text-gray-400 hover:text-blue-500 rounded-lg hover:bg-blue-50">
                                             <Edit2 size={16} />
                                         </button>
@@ -286,6 +309,11 @@ export default function MenuManager({
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        {hasNepali && (
+                                                            <button onClick={() => setTranslateTarget({ entityId: item.id, entityType: 'menu_item', name: item.name, description: item.description })} className="p-1.5 text-gray-400 hover:text-purple-500 rounded bg-gray-50 hover:bg-purple-50" title="Translate">
+                                                                <Globe size={14} />
+                                                            </button>
+                                                        )}
                                                         <button onClick={() => openItemModal(item)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded bg-gray-50 hover:bg-blue-50">
                                                             <Edit2 size={14} />
                                                         </button>
@@ -452,6 +480,22 @@ export default function MenuManager({
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Translation Modal */}
+            {translateTarget && (
+                <TranslationModal
+                    entityId={translateTarget.entityId}
+                    entityType={translateTarget.entityType}
+                    englishName={translateTarget.name}
+                    englishDescription={translateTarget.description}
+                    existingTranslations={translations}
+                    onClose={() => {
+                        setTranslateTarget(null)
+                        // Refresh translations after save
+                        getRestaurantTranslationConfig().then(({ translations: t }) => setTranslations(t))
+                    }}
+                />
             )}
         </div>
     )

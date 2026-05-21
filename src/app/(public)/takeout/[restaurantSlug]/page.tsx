@@ -17,26 +17,45 @@ export default async function TakeoutPage({ params }: { params: Promise<{ restau
 
     if (!restaurant) notFound()
 
-    // Get menu categories + items
-    const { data: categories } = await supabase
-        .from('menu_categories')
-        .select('id, name, sort_order')
-        .eq('restaurant_id', restaurant.id)
-        .eq('is_visible', true)
-        .order('sort_order')
+    // Get menu categories, items, and translations in parallel
+    const [{ data: categories }, { data: items }, { data: rawTranslations }, { data: rawLangs }] = await Promise.all([
+        supabase
+            .from('menu_categories')
+            .select('id, name, sort_order')
+            .eq('restaurant_id', restaurant.id)
+            .eq('is_visible', true)
+            .order('sort_order'),
+        supabase
+            .from('menu_items')
+            .select('id, name, description, price, image_url, category_id, is_available')
+            .eq('restaurant_id', restaurant.id)
+            .eq('is_available', true)
+            .order('name'),
+        supabase
+            .from('translations')
+            .select('language_code, entity_type, entity_id, translated_text')
+            .eq('restaurant_id', restaurant.id),
+        supabase
+            .from('supported_languages')
+            .select('language_code, language_name')
+            .eq('restaurant_id', restaurant.id)
+            .eq('is_active', true)
+            .order('sort_order'),
+    ])
 
-    const { data: items } = await supabase
-        .from('menu_items')
-        .select('id, name, description, price, image_url, category_id, is_available')
-        .eq('restaurant_id', restaurant.id)
-        .eq('is_available', true)
-        .order('name')
+    const translations = (rawTranslations || []) as { language_code: string; entity_type: string; entity_id: string; translated_text: string }[]
+    const supportedLanguages = (rawLangs || []).map(l => ({ code: l.language_code, name: l.language_name }))
+    const langs = supportedLanguages.length > 0
+        ? [{ code: 'en', name: 'EN' }, ...supportedLanguages]
+        : []
 
     return (
         <TakeoutPageClient
             restaurant={{ ...restaurant, description: null }}
             categories={categories || []}
             menuItems={items || []}
+            translations={translations}
+            supportedLanguages={langs}
         />
     )
 }

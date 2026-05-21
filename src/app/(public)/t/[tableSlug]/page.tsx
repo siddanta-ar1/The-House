@@ -69,8 +69,8 @@ export default async function CustomerMenuPage(props: {
 
     const isValidSession = !!sessionToken
 
-    // 2. Fetch Menu Data + Feature Flags in parallel
-    const [{ data: categories }, { data: rawMenuItems }, features] = await Promise.all([
+    // 2. Fetch Menu Data + Feature Flags + Translations in parallel
+    const [{ data: categories }, { data: rawMenuItems }, features, { data: rawTranslations }, { data: rawLangs }] = await Promise.all([
         supabase
             .from('menu_categories')
             .select('*')
@@ -85,6 +85,18 @@ export default async function CustomerMenuPage(props: {
             .eq('is_available', true),
 
         getRestaurantFeatures(restaurantId),
+
+        supabase
+            .from('translations')
+            .select('language_code, entity_type, entity_id, translated_text')
+            .eq('restaurant_id', restaurantId),
+
+        supabase
+            .from('supported_languages')
+            .select('language_code, language_name')
+            .eq('restaurant_id', restaurantId)
+            .eq('is_active', true)
+            .order('sort_order'),
     ])
 
     // Normalize DB field names → client-side field names
@@ -98,6 +110,14 @@ export default async function CustomerMenuPage(props: {
             modifiers: g.menu_item_modifiers || [],
         })),
     })) as MenuItem[]
+
+    const translations = (rawTranslations || []) as { language_code: string; entity_type: string; entity_id: string; translated_text: string }[]
+    const supportedLanguages = (rawLangs || []).map(l => ({ code: l.language_code, name: l.language_name }))
+
+    // Always include English as first option if there are other languages
+    const langs = supportedLanguages.length > 0
+        ? [{ code: 'en', name: 'EN' }, ...supportedLanguages]
+        : []
 
     return (
         <TablePageClient
@@ -116,6 +136,9 @@ export default async function CustomerMenuPage(props: {
             sessionUUID={sessionUUID}
             isValidSession={isValidSession}
             serviceRequestsEnabled={features?.serviceRequestsEnabled !== false}
+            multiLanguageEnabled={features?.multiLanguageEnabled === true}
+            translations={translations}
+            supportedLanguages={langs}
         />
     )
 }

@@ -2,6 +2,7 @@
 
 import { useRef } from 'react'
 import type { MenuCategory } from '@/types/database'
+import { useTranslation } from '@/lib/contexts/TranslationContext'
 
 export default function CategoryNav({
     categories,
@@ -13,6 +14,7 @@ export default function CategoryNav({
     onCategoryChange: (id: string) => void
 }) {
     const scrollRef = useRef<HTMLDivElement>(null)
+    const { t } = useTranslation()
 
     const isActive = (id: string) => activeCategory === id
 
@@ -43,7 +45,7 @@ export default function CategoryNav({
                                 : 'border-transparent text-gray-500 hover:text-gray-900'
                         }`}
                     >
-                        {c.name}
+                        {t('category_name', c.id, c.name)}
                     </button>
                 ))}
             </div>
