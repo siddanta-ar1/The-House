@@ -2,6 +2,7 @@
 
 import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
+import { checkRateLimit, RATE_LIMIT_RULES } from '@/lib/ratelimit'
 
 // Map role names to their default landing pages
 const ROLE_LANDING: Record<string, string> = {
@@ -18,6 +19,12 @@ export async function loginAction(prevState: { error: string | null }, formData:
 
     if (!email || !password) {
         return { error: 'Email and password are required' }
+    }
+
+    // Rate limit: 5 attempts per 15 minutes per IP
+    const rateLimitError = await checkRateLimit('LOGIN', RATE_LIMIT_RULES.LOGIN.requests, RATE_LIMIT_RULES.LOGIN.windowSeconds)
+    if (rateLimitError) {
+        return { error: 'Too many login attempts. Please wait 15 minutes before trying again.' }
     }
 
     const supabase = await createServerClient()

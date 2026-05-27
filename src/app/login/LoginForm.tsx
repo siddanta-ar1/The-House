@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useActionState } from 'react'
+import Link from 'next/link'
 import { loginAction } from './actions'
 import VideoLogo from '@/components/shared/VideoLogo'
 import { Eye, EyeOff } from 'lucide-react'
@@ -46,9 +47,14 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="password">
-                        Password
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                        <label className="block text-sm font-medium text-gray-700" htmlFor="password">
+                            Password
+                        </label>
+                        <Link href="/forgot-password" className="text-xs text-gray-500 hover:text-gray-800 transition">
+                            Forgot password?
+                        </Link>
+                    </div>
                     <div className="relative">
                         <input
                             id="password"

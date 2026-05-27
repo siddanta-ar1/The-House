@@ -189,17 +189,17 @@ export default function PaymentVerificationPanel({
                             </div>
                         </div>
 
-                        {/* Screenshot thumbnail */}
+                        {/* Screenshot thumbnail — routed through auth-gated proxy */}
                         {claim.screenshot_url && (
                             <div className="flex items-center gap-2">
                                 <img
-                                    src={claim.screenshot_url}
+                                    src={`/api/payment-proof?claim=${claim.id}`}
                                     alt="Payment proof"
                                     className="w-16 h-16 rounded-lg object-cover border border-gray-200 cursor-pointer"
-                                    onClick={() => window.open(claim.screenshot_url!, '_blank')}
+                                    onClick={() => window.open(`/api/payment-proof?claim=${claim.id}`, '_blank')}
                                 />
                                 <a
-                                    href={claim.screenshot_url}
+                                    href={`/api/payment-proof?claim=${claim.id}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="text-xs text-blue-600 flex items-center gap-1 hover:underline"

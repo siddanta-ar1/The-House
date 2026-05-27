@@ -1,0 +1,142 @@
+import { NextResponse, type NextRequest } from 'next/server'
+import { updateSession } from '@/lib/supabase/middleware'
+import { Ratelimit } from '@upstash/ratelimit'
+import { Redis } from '@upstash/redis'
+
+// Route protection rules — first match wins
+const ROUTE_RULES: Array<{
+    pattern: RegExp
+    allowedRoles: string[] | null  // null = any authenticated user
+}> = [
+    { pattern: /^\/admin(\/|$)/, allowedRoles: ['super_admin', 'manager'] },
+    { pattern: /^\/kitchen(\/|$)/, allowedRoles: ['kitchen', 'manager', 'super_admin'] },
+    { pattern: /^\/waiter(\/|$)/, allowedRoles: ['waiter', 'manager', 'super_admin'] },
+    { pattern: /^\/dashboard(\/|$)/, allowedRoles: null },
+]
+
+// Role → correct landing page (used to redirect wrong-role users)
+const ROLE_LANDING: Record<string, string> = {
+    super_admin: '/admin/dashboard',
+    manager: '/admin/dashboard',
+    kitchen: '/kitchen',
+    waiter: '/waiter',
+}
+
+// Rate limiter for public QR/table pages — lazy-initialised, Edge-compatible.
+// Limits to 60 requests/min per IP to prevent DoS on public menu pages.
+let _qrLimiter: Ratelimit | null | undefined
+
+function getQrLimiter(): Ratelimit | null {
+    if (_qrLimiter !== undefined) return _qrLimiter
+    try {
+        _qrLimiter = new Ratelimit({
+            redis: Redis.fromEnv(),
+            limiter: Ratelimit.slidingWindow(60, '60 s'),
+            prefix: 'srms:rl:QR',
+            analytics: false,
+        })
+    } catch {
+        _qrLimiter = null
+    }
+    return _qrLimiter
+}
+
+function getRequestIp(request: NextRequest): string {
+    return (
+        request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+        request.headers.get('x-real-ip') ||
+        request.headers.get('cf-connecting-ip') ||
+        '127.0.0.1'
+    )
+}
+
+// Decode the app_role claim from the Supabase JWT without a network call.
+// The claim is injected by the custom_access_token_hook (004_jwt_claims_hook.sql).
+function getRoleFromToken(accessToken: string): string | null {
+    try {
+        // JWT is base64url-encoded — replace URL-safe chars before atob()
+        const base64 = accessToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(base64))
+        return typeof payload.app_role === 'string' ? payload.app_role : null
+    } catch {
+        return null
+    }
+}
+
+export async function middleware(request: NextRequest) {
+    const { pathname } = request.nextUrl
+
+    // Rate-limit public QR/table pages to prevent DoS
+    if (/^\/t\//.test(pathname) || /^\/takeout\//.test(pathname)) {
+        const limiter = getQrLimiter()
+        if (limiter) {
+            const ip = getRequestIp(request)
+            const { success } = await limiter.limit(ip)
+            if (!success) {
+                return new NextResponse('Too many requests. Please slow down.', {
+                    status: 429,
+                    headers: { 'Content-Type': 'text/plain', 'Retry-After': '60' },
+                })
+            }
+        }
+    }
+
+    // Always refresh the Supabase session cookie — this is required by @supabase/ssr
+    // to keep the access token valid across server components and API routes.
+    const { user, supabaseResponse, supabase } = await updateSession(request)
+
+    // Find whether this path needs protection
+    const rule = ROUTE_RULES.find(r => r.pattern.test(pathname))
+
+    // Public route — return the response with refreshed cookies and nothing else
+    if (!rule) return supabaseResponse
+
+    // ── Not authenticated ───────────────────────────────────────────────────────
+    if (!user) {
+        const loginUrl = new URL('/login', request.url)
+        loginUrl.searchParams.set('redirect', pathname)
+        const response = NextResponse.redirect(loginUrl)
+        // Copy over any cookie mutations from updateSession
+        supabaseResponse.cookies.getAll().forEach(({ name, value, ...opts }) => {
+            response.cookies.set(name, value, opts)
+        })
+        return response
+    }
+
+    // ── Role check ──────────────────────────────────────────────────────────────
+    if (rule.allowedRoles) {
+        // getSession() reads from the cookie — no extra network call after getUser()
+        const { data: { session } } = await supabase.auth.getSession()
+        const role = session?.access_token ? getRoleFromToken(session.access_token) : null
+
+        // If we have a role and it's not allowed for this route, redirect the user
+        // to their correct landing page instead of showing an error.
+        // If role is null (JWT claims not yet populated), let it through —
+        // the page-level requireRole() will handle the final gate.
+        if (role && !rule.allowedRoles.includes(role)) {
+            const landing = ROLE_LANDING[role] ?? '/'
+            const redirectResponse = NextResponse.redirect(new URL(landing, request.url))
+            supabaseResponse.cookies.getAll().forEach(({ name, value, ...opts }) => {
+                redirectResponse.cookies.set(name, value, opts)
+            })
+            return redirectResponse
+        }
+    }
+
+    return supabaseResponse
+}
+
+export const config = {
+    matcher: [
+        /*
+         * Run on all paths except:
+         *   - _next/static  — compiled JS/CSS bundles
+         *   - _next/image   — image optimisation
+         *   - Static assets — fonts, icons, images
+         *
+         * The public QR pages (/t/*) and marketing pages are intentionally
+         * NOT in ROUTE_RULES so they pass through after the session refresh.
+         */
+        '/((?!_next/static|_next/image|favicon\\.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|otf)$).*)',
+    ],
+}

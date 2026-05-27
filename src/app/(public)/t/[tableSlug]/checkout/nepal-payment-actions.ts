@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { validateInput } from '@/lib/validation'
+import { checkRateLimit, RATE_LIMIT_RULES } from '@/lib/ratelimit'
 import { z } from 'zod'
 
 const PaymentClaimInputSchema = z.object({
@@ -21,6 +22,14 @@ export async function submitPaymentClaim(formData: FormData): Promise<{ error?: 
     const screenshot = formData.get('screenshot') as File | null
     const orderId = formData.get('orderId') as string | null
 
+    // Rate limit: 3 payment claims per 5 minutes per IP
+    const rateLimitError = await checkRateLimit(
+        'PAYMENT_CLAIM',
+        RATE_LIMIT_RULES.PAYMENT_CLAIM.requests,
+        RATE_LIMIT_RULES.PAYMENT_CLAIM.windowSeconds
+    )
+    if (rateLimitError) return { error: 'Too many payment attempts. Please wait a few minutes.' }
+
     const validation = validateInput(PaymentClaimInputSchema, {
         restaurantId,
         amount,
@@ -38,6 +47,26 @@ export async function submitPaymentClaim(formData: FormData): Promise<{ error?: 
     const { restaurantId: validRestaurantId, amount: validAmount, paymentMethod: validMethod, phone: validPhone, screenshot: validScreenshot, orderId: validOrderId } = validation.data!
 
     const supabase = await createAdminClient()
+
+    // Validate claimed amount against the actual order total (prevent under-payment fraud)
+    if (validOrderId) {
+        const { data: order } = await supabase
+            .from('orders')
+            .select('total_amount, restaurant_id')
+            .eq('id', validOrderId)
+            .single()
+
+        if (!order) return { error: 'Order not found.' }
+
+        // Ensure the order belongs to the claimed restaurant (cross-tenant guard)
+        if (order.restaurant_id !== validRestaurantId) return { error: 'Invalid request.' }
+
+        // Allow ±1 rupee tolerance for rounding differences
+        const diff = Math.abs(validAmount - order.total_amount)
+        if (diff > 1) {
+            return { error: `Payment amount (Rs. ${validAmount.toFixed(2)}) does not match order total (Rs. ${order.total_amount.toFixed(2)}). Please re-enter the correct amount.` }
+        }
+    }
 
     let screenshotUrl: string | null = null
 
