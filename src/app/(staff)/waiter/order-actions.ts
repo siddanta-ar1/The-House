@@ -2,26 +2,40 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { logAudit } from '@/lib/audit'
+import { requireRole } from '@/lib/auth'
 
 /**
  * Waiter marks an order as delivered.
  * Step 7 of the Golden Path: Waiter picks up ready food & delivers.
  */
 export async function markOrderDelivered(orderId: string) {
+    const currentUser = await requireRole('waiter', 'manager', 'super_admin')
     const adminSupabase = await createAdminClient()
 
-    const { error } = await adminSupabase
+    const { data: order, error } = await adminSupabase
         .from('orders')
         .update({
             status: 'delivered',
             delivered_at: new Date().toISOString(),
         })
         .eq('id', orderId)
+        .select('restaurant_id')
+        .single()
 
     if (error) {
         console.error('Failed to mark order delivered:', error)
         return { error: error.message }
     }
+
+    void logAudit({
+        restaurantId: order.restaurant_id,
+        userId: currentUser.id,
+        action: 'order_delivered',
+        entityType: 'order',
+        entityId: orderId,
+        newValue: { status: 'delivered' },
+    })
 
     revalidatePath('/waiter')
     return { success: true }
@@ -43,7 +57,7 @@ export async function verifyPaymentAndCloseTable(
 ): Promise<{ error?: string; success?: boolean; tableClosed?: boolean }> {
     const supabase = await createAdminClient()
 
-    // 1. Verify the payment claim and get order_id
+    // 1. Verify the payment claim and get order_id + restaurant_id
     const { data: claim, error: claimError } = await supabase
         .from('payment_verifications')
         .update({
@@ -52,7 +66,7 @@ export async function verifyPaymentAndCloseTable(
             verified_at: new Date().toISOString(),
         })
         .eq('id', claimId)
-        .select('order_id')
+        .select('order_id, restaurant_id')
         .single()
 
     if (claimError || !claim) {
@@ -61,7 +75,13 @@ export async function verifyPaymentAndCloseTable(
     }
 
     if (!claim.order_id) {
-        // No order linked — just verify, can't auto-close
+        void logAudit({
+            restaurantId: claim.restaurant_id,
+            userId,
+            action: 'payment_verified',
+            entityType: 'payment',
+            entityId: claimId,
+        })
         revalidatePath('/waiter')
         return { success: true, tableClosed: false }
     }
@@ -74,7 +94,7 @@ export async function verifyPaymentAndCloseTable(
             paid_at: new Date().toISOString(),
         })
         .eq('id', claim.order_id)
-        .select('session_id')
+        .select('session_id, restaurant_id')
         .single()
 
     if (orderError || !order) {
@@ -82,6 +102,15 @@ export async function verifyPaymentAndCloseTable(
         revalidatePath('/waiter')
         return { success: true, tableClosed: false }
     }
+
+    void logAudit({
+        restaurantId: order.restaurant_id,
+        userId,
+        action: 'payment_verified',
+        entityType: 'payment',
+        entityId: claimId,
+        newValue: { order_id: claim.order_id, payment_status: 'paid' },
+    })
 
     // 3. Check if ALL orders in this session are paid
     const { count: unpaidCount } = await supabase
@@ -105,6 +134,15 @@ export async function verifyPaymentAndCloseTable(
         if (sessionError) {
             console.error('Failed to close session:', sessionError)
         }
+
+        void logAudit({
+            restaurantId: order.restaurant_id,
+            userId,
+            action: 'session_closed',
+            entityType: 'session',
+            entityId: order.session_id,
+            newValue: { reason: 'all_orders_paid' },
+        })
 
         revalidatePath('/waiter')
         return { success: true, tableClosed: true }

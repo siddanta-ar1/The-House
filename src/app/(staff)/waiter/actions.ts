@@ -2,6 +2,7 @@
 
 import { createServerClient, createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { logAudit } from '@/lib/audit'
 
 export async function openSession(tableId: string, restaurantId: string, guestCount?: number) {
     const supabase = await createServerClient()
@@ -26,7 +27,8 @@ export async function openSession(tableId: string, restaurantId: string, guestCo
             guest_count: guestCount || null,
             session_token: sessionToken,
         })
-        .select()
+        .select('id')
+        .single()
 
     if (error) {
         console.error('[openSession] Insert failed:', error)
@@ -34,14 +36,26 @@ export async function openSession(tableId: string, restaurantId: string, guestCo
         return { error: error.message }
     }
 
+    void logAudit({
+        restaurantId,
+        userId: user.id,
+        action: 'session_opened',
+        entityType: 'session',
+        entityId: data?.id,
+        newValue: { table_id: tableId, guest_count: guestCount ?? null },
+    })
+
     revalidatePath('/waiter')
     return { success: true }
 }
 
 export async function closeSession(sessionId: string) {
+    const supabase = await createServerClient()
     const adminSupabase = await createAdminClient()
 
-    const { error } = await adminSupabase
+    const { data: { user } } = await supabase.auth.getUser()
+
+    const { data: session, error } = await adminSupabase
         .from('sessions')
         .update({
             status: 'closed',
@@ -49,8 +63,19 @@ export async function closeSession(sessionId: string) {
         })
         .eq('id', sessionId)
         .eq('status', 'active')
+        .select('restaurant_id')
+        .single()
 
     if (error) return { error: error.message }
+
+    void logAudit({
+        restaurantId: session.restaurant_id,
+        userId: user?.id ?? null,
+        action: 'session_closed',
+        entityType: 'session',
+        entityId: sessionId,
+        newValue: { reason: 'manual' },
+    })
 
     revalidatePath('/waiter')
     return { success: true }

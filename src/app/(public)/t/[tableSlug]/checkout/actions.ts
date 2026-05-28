@@ -243,11 +243,12 @@ async function placeOrderFallback(
     total: number
     pointsEarned: number
 } | null> {
-    // Get session + restaurant context
+    // Get session + restaurant context — must still be active (race condition guard)
     const { data: sessionRow, error: sessionCtxError } = await supabase
         .from('sessions')
         .select('restaurant_id')
         .eq('id', sessionUuid)
+        .eq('status', 'active')
         .single()
 
     if (sessionCtxError || !sessionRow?.restaurant_id) return null
@@ -280,11 +281,11 @@ async function placeOrderFallback(
     for (const item of payload) {
         const { data: menuItem } = await supabase
             .from('menu_items')
-            .select('id, price')
+            .select('id, price, is_available')
             .eq('id', item.menu_item_id)
             .single()
 
-        if (!menuItem?.id) continue
+        if (!menuItem?.id || menuItem.is_available === false) continue
 
         const unitPrice = Number(menuItem.price ?? 0)
 

@@ -22,6 +22,7 @@ export default async function OrderPage(props: {
         .from('orders')
         .select(`
       *,
+      invoice_number,
       order_items (
         *,
         menu_items (name),
@@ -92,15 +93,26 @@ export default async function OrderPage(props: {
                     />
                 )}
 
-                {/* Invoice / PAN display */}
-                {/* eslint-disable @typescript-eslint/no-explicit-any */}
-                {(order as any).invoice_number && (
-                    <InvoiceBanner
-                        invoiceNumber={(order as any).invoice_number}
-                        panNumber={restaurantInfo?.pan_number || (order as any).pan_number_snapshot}
-                        restaurantName={restaurantInfo?.name}
-                        vatRegistered={restaurantInfo?.vat_registered}
-                    />
+                {/* Invoice / PAN display + print */}
+                {order.invoice_number && (
+                    <>
+                        <InvoiceBanner
+                            invoiceNumber={order.invoice_number}
+                            panNumber={restaurantInfo?.pan_number}
+                            restaurantName={restaurantInfo?.name}
+                            vatRegistered={restaurantInfo?.vat_registered}
+                        />
+                        <div className="mt-3 text-center">
+                            <a
+                                href={`/t/${params.tableSlug}/order/${params.orderId}/receipt`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg px-4 py-2 hover:bg-gray-50 transition"
+                            >
+                                🖨️ Print / Download Receipt
+                            </a>
+                        </div>
+                    </>
                 )}
 
                 {/* Support/Extra Actions */}

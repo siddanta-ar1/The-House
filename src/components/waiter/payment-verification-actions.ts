@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { logAudit } from '@/lib/audit'
 
 export async function verifyPayment(
     claimId: string,
@@ -10,7 +11,7 @@ export async function verifyPayment(
 ): Promise<{ error?: string; success?: boolean }> {
     const supabase = await createAdminClient()
 
-    const { error } = await supabase
+    const { data: claim, error } = await supabase
         .from('payment_verifications')
         .update({
             staff_verified: action === 'verified',
@@ -19,11 +20,22 @@ export async function verifyPayment(
             staff_verified_at: new Date().toISOString(),
         })
         .eq('id', claimId)
+        .select('restaurant_id, amount, payment_method')
+        .single()
 
     if (error) {
         console.error('Payment verification update failed:', error)
         return { error: 'Failed to update payment status' }
     }
+
+    void logAudit({
+        restaurantId: claim.restaurant_id,
+        userId,
+        action: action === 'verified' ? 'payment_verified' : 'payment_rejected',
+        entityType: 'payment',
+        entityId: claimId,
+        newValue: { amount: claim.amount, payment_method: claim.payment_method, action },
+    })
 
     revalidatePath('/waiter')
     return { success: true }
@@ -49,7 +61,7 @@ export async function verifyPaymentAndCloseTable(
             staff_verified_at: new Date().toISOString(),
         })
         .eq('id', claimId)
-        .select('order_id')
+        .select('order_id, restaurant_id')
         .single()
 
     if (claimError || !claim) {
@@ -59,11 +71,18 @@ export async function verifyPaymentAndCloseTable(
 
     if (!claim.order_id) {
         // No order linked — just verify, can't auto-close
+        void logAudit({
+            restaurantId: claim.restaurant_id,
+            userId,
+            action: 'payment_verified',
+            entityType: 'payment',
+            entityId: claimId,
+        })
         revalidatePath('/waiter')
         return { success: true, tableClosed: false }
     }
 
-    // 2. Mark the order as paid and get its session_id
+    // 2. Mark the order as paid and get its session_id + restaurant_id
     const { data: order, error: orderError } = await supabase
         .from('orders')
         .update({
@@ -71,7 +90,7 @@ export async function verifyPaymentAndCloseTable(
             paid_at: new Date().toISOString(),
         })
         .eq('id', claim.order_id)
-        .select('session_id')
+        .select('session_id, restaurant_id')
         .single()
 
     if (orderError || !order) {
@@ -79,6 +98,15 @@ export async function verifyPaymentAndCloseTable(
         revalidatePath('/waiter')
         return { success: true, tableClosed: false }
     }
+
+    void logAudit({
+        restaurantId: order.restaurant_id,
+        userId,
+        action: 'payment_verified',
+        entityType: 'payment',
+        entityId: claimId,
+        newValue: { order_id: claim.order_id, payment_status: 'paid' },
+    })
 
     // 3. Check if ALL orders in this session are now paid
     const { count: unpaidCount } = await supabase
@@ -98,6 +126,15 @@ export async function verifyPaymentAndCloseTable(
             })
             .eq('id', order.session_id)
             .eq('status', 'active')
+
+        void logAudit({
+            restaurantId: order.restaurant_id,
+            userId,
+            action: 'session_closed',
+            entityType: 'session',
+            entityId: order.session_id,
+            newValue: { reason: 'all_orders_paid' },
+        })
 
         revalidatePath('/waiter')
         return { success: true, tableClosed: true }
